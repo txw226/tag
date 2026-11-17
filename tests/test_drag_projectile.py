@@ -6,6 +6,7 @@ from tooth.sims.drag_projectile import (
     G_EARTH,
     launch_state,
     make_filter,
+    make_model,
     simulate,
 )
 
@@ -191,3 +192,8 @@ def test_golden_ekf():
         ]
     )
     np.testing.assert_allclose(res.P_post[-1], P_expected, rtol=GOLDEN_RTOL)
+
+
+def test_model_without_radar_raises_clearly():
+    with pytest.raises(ValueError, match="model has no radar"):
+        make_model(DT, ACCEL_STD).require_radar()

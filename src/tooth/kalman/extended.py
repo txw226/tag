@@ -154,6 +154,10 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         """
         if z is None:
             return
+        h: MeasurementFn
+        H_jac: MeasurementFn | None
+        residual: ResidualFn | None
+        R: NDArray
         if sensor is not None:
             h, H_jac, residual = (
                 sensor.h,
@@ -161,7 +165,7 @@ class ExtendedKalmanFilter(KalmanFilterBase):
                 getattr(sensor, "residual", None),
             )
             R = np.atleast_2d(np.asarray(sensor.R, dtype=float))
-        elif self.h is not None:
+        elif self.h is not None and self.R is not None:  # __init__ guarantees both or neither
             h, H_jac, residual, R = self.h, self.H_jac, self.residual, self.R
         else:
             raise ValueError("filter has no default h; pass a sensor to update()")

@@ -56,7 +56,7 @@ def main() -> None:
     cov = np.concatenate([P_init[None], res.P_post])
     sig = np.sqrt(np.diagonal(cov, axis1=1, axis2=2))
     truth = run.truth
-    radar = run.model.radar
+    radar = run.model.require_radar()
     meas = radar.to_position(run.measurements)
 
     meas_rmse = rmse(meas - truth[:, :2])

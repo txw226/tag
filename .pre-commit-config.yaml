@@ -15,3 +15,12 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      - id: mypy
+        name: mypy
+        # Checks the whole project (files from [tool.mypy]), not just staged files,
+        # so cross-module type errors are caught.
+        entry: uv run mypy
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+        require_serial: true
