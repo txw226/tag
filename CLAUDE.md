@@ -39,4 +39,4 @@ The user's shell setup (`~/tooth.zshrc`) activates `.venv` automatically and def
 - `tests/test_drag_projectile.py` holds the same kind of NEES test for the EKF (gusts 2 m/s², 50 m/s launch). Its bounds also come from a 20-seed sweep, so re-derive them if those sim parameters change.
 - `tests/test_fusion.py` holds a NEES test for GNSS + two cameras, with bounds also taken from a 20-seed sweep. Keep the cameras well away from the flight path: a target within a few metres of a camera makes the projection too nonlinear, and NEES spikes above 100. Stereo-only errors are heavy-tailed, so compare RMSE over at least 20 seeds.
 - `tests/test_rocket.py` holds a NEES test over the 5-element augmented state (≈ 5), with bounds from a 20-seed sweep. It's the slowest test file (about 13 s), because each NEES call simulates 50 flights of about 270 steps.
-- `src/tooth/try.py` / `try.cpp` are scratch files.
+- `src/tooth/try.cpp` is a scratch file.

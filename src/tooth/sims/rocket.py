@@ -23,6 +23,7 @@ ends at apogee (vy turning negative) or ``t_max``.
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass
 
 import numpy as np
@@ -205,14 +206,14 @@ def simulate(
             # Thrust held at its exact mean over the substep: evaluating the step
             # function at RK4's stage times would lose impulse at burnout.
             thrust = motor.mean_thrust(t0, t0 + h)
-            x = rk4_step(lambda t, s: deriv(t, s, thrust, gust), x, h, t=t0)
+            x = rk4_step(lambda t, s, thrust=thrust, gust=gust: deriv(t, s, thrust, gust), x, h, t=t0)
         if x[3] < 0:
             break
         states.append(x)
 
     truth = np.array(states)
     t = dt * np.arange(len(truth))
-    controls = np.array([motor.control(t0, t1) for t0, t1 in zip(t[:-1], t[1:])]).reshape(-1, 2)
+    controls = np.array([motor.control(t0, t1) for t0, t1 in itertools.pairwise(t)]).reshape(-1, 2)
     return RocketRun(t=t, truth=truth, cd=cd, controls=controls, motor=motor, model=model)
 
 

@@ -115,7 +115,7 @@ def test_cd_estimate_is_unbiased():
     z = []
     for _ in range(20):
         run = random_run(rng, ACCEL_STD)
-        res, truth5 = track(run, rng)
+        res, _truth5 = track(run, rng)
         z.append((res.x_post[-1, 4] - run.cd) / np.sqrt(res.P_post[-1, 4, 4]))
     z = np.array(z)
     assert abs(z.mean()) < 3 / np.sqrt(len(z))  # 3 standard errors

@@ -66,7 +66,7 @@ def test_fusion_beats_each_source_alone():
     # thresholds below hold for every block.
     sq_err = {name: [] for name in CONFIGS}
     for seed in range(20):
-        t, truth, streams = scenario(np.random.default_rng(seed), accel_std=0.5)
+        _t, truth, streams = scenario(np.random.default_rng(seed), accel_std=0.5)
         for name, sensor_names in CONFIGS.items():
             err = run_filter(streams, sensor_names, 0.5).x_post[:, :2] - truth[1:, :2]
             sq_err[name].append(np.sum(err**2, axis=1))
@@ -81,7 +81,7 @@ def pooled_nees(q_scale: float = 1.0, runs: int = 50, seed: int = 7) -> float:
     rng = np.random.default_rng(seed)
     nees = []
     for _ in range(runs):
-        t, truth, streams = scenario(rng, accel_std)
+        _t, truth, streams = scenario(rng, accel_std)
         res = run_filter(streams, CONFIGS["fused"], accel_std, q_scale)
         err = res.x_post - truth[1:]
         nees.append(np.einsum("ki,kij,kj->k", err, np.linalg.inv(res.P_post), err))
@@ -120,7 +120,7 @@ GOLDEN_P = [
 
 
 def test_golden_fused_run():
-    t, truth, streams = scenario(np.random.default_rng(2024), accel_std=0.5)
+    t, _truth, streams = scenario(np.random.default_rng(2024), accel_std=0.5)
     res = run_filter(streams, CONFIGS["fused"], 0.5)
     assert len(t) == GOLDEN_STEPS
     np.testing.assert_allclose(res.x_post[-1], GOLDEN_X, rtol=1e-9)
