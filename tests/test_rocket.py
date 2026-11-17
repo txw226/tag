@@ -15,7 +15,9 @@ CD_STD = 0.10
 
 
 def sensors():
-    return RangeBearingRadar([-2000.0, 0.0], range_std=5.0, bearing_std=0.001), GnssPosition(std=3.0, every=2)
+    return RangeBearingRadar(
+        [-2000.0, 0.0], range_std=5.0, bearing_std=0.001
+    ), GnssPosition(std=3.0, every=2)
 
 
 def track(run, rng, cd_guess=CD_NOMINAL, cd_std=CD_STD, q_scale=1.0):
@@ -30,7 +32,9 @@ def track(run, rng, cd_guess=CD_NOMINAL, cd_std=CD_STD, q_scale=1.0):
 
 def random_run(rng, accel_std):
     """Rail-exit state and Cd drawn from the filter's prior."""
-    x0 = rail_exit_state() + np.array([POS_STD, POS_STD, VEL_STD, VEL_STD]) * rng.standard_normal(4)
+    x0 = rail_exit_state() + np.array(
+        [POS_STD, POS_STD, VEL_STD, VEL_STD]
+    ) * rng.standard_normal(4)
     cd = CD_NOMINAL + CD_STD * rng.standard_normal()
     return simulate(x0, cd, DT, accel_std, rng)
 
@@ -42,9 +46,13 @@ def test_rocket_equation():
     """No gravity or drag, thrust along v: speed gain = v_e ln(m0 / m_burnout)."""
     motor = Motor()
     x0 = rail_exit_state()
-    run = simulate(x0, 0.0, DT, 0.0, np.random.default_rng(0), motor=motor, g=0.0, t_max=6.0)
+    run = simulate(
+        x0, 0.0, DT, 0.0, np.random.default_rng(0), motor=motor, g=0.0, t_max=6.0
+    )
     gain = np.linalg.norm(run.truth[-1, 2:]) - np.linalg.norm(x0[2:])
-    assert gain == pytest.approx(motor.exhaust_velocity * np.log(motor.mass0 / motor.mass_burnout), rel=1e-10)
+    assert gain == pytest.approx(
+        motor.exhaust_velocity * np.log(motor.mass0 / motor.mass_burnout), rel=1e-10
+    )
 
 
 def test_unpowered_dragless_flight_is_ballistic():
@@ -52,13 +60,18 @@ def test_unpowered_dragless_flight_is_ballistic():
     run = simulate(x0, 0.0, DT, 0.0, np.random.default_rng(0), motor=Motor(thrust=0.0))
     t = run.t
     np.testing.assert_allclose(run.truth[:, 0], x0[0] + x0[2] * t, atol=1e-9)
-    np.testing.assert_allclose(run.truth[:, 1], x0[1] + x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9)
+    np.testing.assert_allclose(
+        run.truth[:, 1], x0[1] + x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9
+    )
     assert abs(t[-1] - x0[3] / G_EARTH) < DT  # stops at apogee
 
 
 def test_drag_lowers_apogee():
     x0 = rail_exit_state()
-    apogee = {cd: simulate(x0, cd, DT, 0.0, np.random.default_rng(0)).truth[-1, 1] for cd in (0.0, 0.3, 0.6)}
+    apogee = {
+        cd: simulate(x0, cd, DT, 0.0, np.random.default_rng(0)).truth[-1, 1]
+        for cd in (0.0, 0.3, 0.6)
+    }
     assert apogee[0.0] > apogee[0.3] > apogee[0.6]
 
 
@@ -70,14 +83,18 @@ def test_air_density():
 def test_motor_controls_conserve_impulse_across_burnout():
     motor = Motor(burn_time=4.03)
     assert motor.mean_thrust(4.0, 4.1) == pytest.approx(0.3 * motor.thrust)
-    run = simulate(rail_exit_state(), CD_NOMINAL, DT, 0.0, np.random.default_rng(0), motor=motor)
+    run = simulate(
+        rail_exit_state(), CD_NOMINAL, DT, 0.0, np.random.default_rng(0), motor=motor
+    )
     assert run.controls.shape == (len(run.t) - 1, 2)
     impulse = np.sum(run.controls[:, 0]) * DT
     assert impulse == pytest.approx(motor.thrust * motor.burn_time)
     np.testing.assert_allclose(run.controls[-1], [0.0, motor.mass_burnout])
 
 
-@pytest.mark.parametrize("step", [5, 39, 40, 150])  # burning, last burning step, burnout step, coasting
+@pytest.mark.parametrize(
+    "step", [5, 39, 40, 150]
+)  # burning, last burning step, burnout step, coasting
 def test_transition_jacobian_matches_numerical(step):
     run = simulate(rail_exit_state(), CD_NOMINAL, DT, 0.0, np.random.default_rng(0))
     m, u = run.model, run.controls[step]
@@ -104,8 +121,10 @@ def test_cd_estimate_converges_and_beats_a_fixed_guess():
     assert sigma_cd[-1] < CD_STD / 3
 
     fixed, _ = track(run, np.random.default_rng(43), cd_guess=guess, cd_std=0.0)
+
     def pos_rmse(r):
         return np.sqrt(np.mean(np.sum((r.x_post[:, :2] - truth5[:, :2]) ** 2, axis=1)))
+
     assert pos_rmse(res) < 0.5 * pos_rmse(fixed)
 
 
@@ -154,13 +173,49 @@ def test_nees_detects_mistuned_q(q_scale):
 # right?". Regenerate deliberately after an intended numerical change and say
 # why in the commit (see the note in test_drag_projectile.py).
 GOLDEN_STEPS = 295
-GOLDEN_X = [1433.0100373422215, 4354.8691526913235, 44.38450901275835, 0.48759285771646788, 0.31090161996001842]
+GOLDEN_X = [
+    1433.0100373422215,
+    4354.8691526913235,
+    44.38450901275835,
+    0.48759285771646788,
+    0.31090161996001842,
+]
 GOLDEN_P = [
-    [5.6879557562718208e-01, -1.7096341664686269e-02, 1.5404836093303337e-01, -3.5508817135923593e-03, -1.4088977678313346e-05],
-    [-1.7096341664686269e-02, 5.6304724860711697e-01, -3.4856790663019095e-03, 1.5422286676772023e-01, -9.2520434660399567e-06],
-    [1.5404836093303337e-01, -3.4856790663019095e-03, 8.6461621557417684e-02, -1.0147884250844516e-03, -6.4190050586786066e-06],
-    [-3.5508817135923593e-03, 1.5422286676772023e-01, -1.0147884250844516e-03, 8.7086852655946734e-02, -1.0310792051491765e-06],
-    [-1.4088977678313346e-05, -9.2520434660399567e-06, -6.4190050586786066e-06, -1.0310792051491765e-06, 3.0690191069234597e-06],
+    [
+        5.6879557562718208e-01,
+        -1.7096341664686269e-02,
+        1.5404836093303337e-01,
+        -3.5508817135923593e-03,
+        -1.4088977678313346e-05,
+    ],
+    [
+        -1.7096341664686269e-02,
+        5.6304724860711697e-01,
+        -3.4856790663019095e-03,
+        1.5422286676772023e-01,
+        -9.2520434660399567e-06,
+    ],
+    [
+        1.5404836093303337e-01,
+        -3.4856790663019095e-03,
+        8.6461621557417684e-02,
+        -1.0147884250844516e-03,
+        -6.4190050586786066e-06,
+    ],
+    [
+        -3.5508817135923593e-03,
+        1.5422286676772023e-01,
+        -1.0147884250844516e-03,
+        8.7086852655946734e-02,
+        -1.0310792051491765e-06,
+    ],
+    [
+        -1.4088977678313346e-05,
+        -9.2520434660399567e-06,
+        -6.4190050586786066e-06,
+        -1.0310792051491765e-06,
+        3.0690191069234597e-06,
+    ],
 ]
 
 

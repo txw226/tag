@@ -5,7 +5,9 @@ from tooth.kalman import LinearKalmanFilter
 
 
 def scalar_filter(sigma: float, x0: float) -> LinearKalmanFilter:
-    return LinearKalmanFilter(F=[[1.0]], H=[[1.0]], Q=[[0.0]], R=[[sigma**2]], x0=[x0], P0=[[sigma**2]])
+    return LinearKalmanFilter(
+        F=[[1.0]], H=[[1.0]], Q=[[0.0]], R=[[sigma**2]], x0=[x0], P0=[[sigma**2]]
+    )
 
 
 @pytest.mark.parametrize(
@@ -21,7 +23,14 @@ def scalar_filter(sigma: float, x0: float) -> LinearKalmanFilter:
     ],
 )
 def test_shape_validation(kwargs, match):
-    base = {"F": np.eye(2), "H": np.ones((1, 2)), "Q": np.eye(2), "R": np.eye(1), "x0": np.zeros(2), "P0": np.eye(2)}
+    base = {
+        "F": np.eye(2),
+        "H": np.ones((1, 2)),
+        "Q": np.eye(2),
+        "R": np.eye(1),
+        "x0": np.zeros(2),
+        "P0": np.eye(2),
+    }
     base.update(kwargs)
     with pytest.raises(ValueError, match=match):
         LinearKalmanFilter(**base)
@@ -71,7 +80,15 @@ def test_covariance_stays_symmetric_positive_definite():
 
 def test_filter_copies_its_inputs():
     """In-place edits to a filter's matrices must not leak into the caller's arrays, or vice versa."""
-    args = {"F": np.eye(2), "H": np.ones((1, 2)), "Q": np.eye(2), "R": np.eye(1), "x0": np.zeros(2), "P0": np.eye(2), "B": np.ones((2, 1))}
+    args = {
+        "F": np.eye(2),
+        "H": np.ones((1, 2)),
+        "Q": np.eye(2),
+        "R": np.eye(1),
+        "x0": np.zeros(2),
+        "P0": np.eye(2),
+        "B": np.ones((2, 1)),
+    }
     originals = {k: v.copy() for k, v in args.items()}
     kf = LinearKalmanFilter(**args)
     for name in ("F", "H", "Q", "R", "B"):

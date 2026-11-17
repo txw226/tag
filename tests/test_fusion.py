@@ -23,8 +23,22 @@ GNSS_OUTAGE = (2.0, 3.0)  # s
 
 def sensors():
     gnss = GnssPosition(std=2.0, every=10)
-    cam_l = PinholeCamera([-50.0, 1.0], np.radians(18), focal_px=1000.0, pixel_std=3.0, width_px=300.0, name="cam L")
-    cam_r = PinholeCamera([190.0, 1.0], np.radians(162), focal_px=1000.0, pixel_std=3.0, width_px=300.0, name="cam R")
+    cam_l = PinholeCamera(
+        [-50.0, 1.0],
+        np.radians(18),
+        focal_px=1000.0,
+        pixel_std=3.0,
+        width_px=300.0,
+        name="cam L",
+    )
+    cam_r = PinholeCamera(
+        [190.0, 1.0],
+        np.radians(162),
+        focal_px=1000.0,
+        pixel_std=3.0,
+        width_px=300.0,
+        name="cam R",
+    )
     return gnss, cam_l, cam_r
 
 
@@ -56,7 +70,11 @@ def run_filter(streams, names, accel_std, q_scale=1.0):
     return ekf.filter_sensors([(streams[n][0], streams[n][1][1:]) for n in names])
 
 
-CONFIGS = {"GNSS": ["GNSS"], "stereo": ["cam L", "cam R"], "fused": ["GNSS", "cam L", "cam R"]}
+CONFIGS = {
+    "GNSS": ["GNSS"],
+    "stereo": ["cam L", "cam R"],
+    "fused": ["GNSS", "cam L", "cam R"],
+}
 
 
 def test_fusion_beats_each_source_alone():
@@ -70,7 +88,9 @@ def test_fusion_beats_each_source_alone():
         for name, sensor_names in CONFIGS.items():
             err = run_filter(streams, sensor_names, 0.5).x_post[:, :2] - truth[1:, :2]
             sq_err[name].append(np.sum(err**2, axis=1))
-    rmse = {name: float(np.sqrt(np.concatenate(v).mean())) for name, v in sq_err.items()}
+    rmse = {
+        name: float(np.sqrt(np.concatenate(v).mean())) for name, v in sq_err.items()
+    }
     assert rmse["fused"] < 0.5 * rmse["GNSS"]
     assert rmse["fused"] < rmse["stereo"]
 
@@ -110,12 +130,37 @@ def test_fused_nees_detects_mistuned_q(q_scale):
 # right?". Regenerate deliberately after an intended numerical change and say
 # why in the commit (see the note in test_drag_projectile.py).
 GOLDEN_STEPS = 100
-GOLDEN_X = [116.10448852984813, 0.3124615620545579, 13.965153053294346, -21.13281551980201]
+GOLDEN_X = [
+    116.10448852984813,
+    0.3124615620545579,
+    13.965153053294346,
+    -21.13281551980201,
+]
 GOLDEN_P = [
-    [0.11731592104571772, -0.014635588836973756, 0.031675498358460744, -0.00082966927602072],
-    [-0.014635588836973756, 0.024998149978732585, -0.00044184770602905525, 0.014141739340515611],
-    [0.03167549835846073, -0.0004418477060290552, 0.01981626999541621, 0.001788701453533504],
-    [-0.0008296692760207196, 0.014141739340515611, 0.001788701453533504, 0.014650042926720555],
+    [
+        0.11731592104571772,
+        -0.014635588836973756,
+        0.031675498358460744,
+        -0.00082966927602072,
+    ],
+    [
+        -0.014635588836973756,
+        0.024998149978732585,
+        -0.00044184770602905525,
+        0.014141739340515611,
+    ],
+    [
+        0.03167549835846073,
+        -0.0004418477060290552,
+        0.01981626999541621,
+        0.001788701453533504,
+    ],
+    [
+        -0.0008296692760207196,
+        0.014141739340515611,
+        0.001788701453533504,
+        0.014650042926720555,
+    ],
 ]
 
 

@@ -22,14 +22,24 @@ def rmse(err):
 
 
 def noise_free(drag):
-    return simulate(launch_state(SPEED, ANGLE), DT, 0.0, 0.0, 0.0, np.random.default_rng(0), drag=drag)
+    return simulate(
+        launch_state(SPEED, ANGLE),
+        DT,
+        0.0,
+        0.0,
+        0.0,
+        np.random.default_rng(0),
+        drag=drag,
+    )
 
 
 def test_zero_drag_matches_vacuum_closed_form():
     run = noise_free(drag=0.0)
     x0, t = launch_state(SPEED, ANGLE), run.t
     np.testing.assert_allclose(run.truth[:, 0], x0[2] * t, atol=1e-9)
-    np.testing.assert_allclose(run.truth[:, 1], x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9)
+    np.testing.assert_allclose(
+        run.truth[:, 1], x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9
+    )
     assert abs(t[-1] - 2 * x0[3] / G_EARTH) < DT
 
 
@@ -49,12 +59,16 @@ def test_noise_free_measurements_invert_to_truth():
     np.testing.assert_allclose(pos, run.truth[:, :2], atol=1e-9)
 
 
-@pytest.mark.parametrize("state", [[10.0, 20.0, 25.0, 15.0], [80.0, 5.0, -3.0, -30.0], [0.0, 0.0, 0.0, 0.0]])
+@pytest.mark.parametrize(
+    "state", [[10.0, 20.0, 25.0, 15.0], [80.0, 5.0, -3.0, -30.0], [0.0, 0.0, 0.0, 0.0]]
+)
 def test_analytic_jacobians_match_numerical(state):
     m = noise_free(0.008).model
     x = np.array(state)
     np.testing.assert_allclose(m.F_jac(x), numerical_jacobian(m.f, x), atol=1e-8)
-    np.testing.assert_allclose(m.radar.H_jac(x), numerical_jacobian(m.radar.h, x), atol=1e-8)
+    np.testing.assert_allclose(
+        m.radar.H_jac(x), numerical_jacobian(m.radar.h, x), atol=1e-8
+    )
 
 
 def test_ekf_beats_raw_measurements():
@@ -138,7 +152,11 @@ def test_golden_simulation():
         [29.96096601906115, 25.557234332497217, 25.777821594534863, 17.34026736444289],
         rtol=GOLDEN_RTOL,
     )
-    np.testing.assert_allclose(run.measurements[-1], [131.92844584987535, 0.20208214786021106], rtol=GOLDEN_RTOL)
+    np.testing.assert_allclose(
+        run.measurements[-1],
+        [131.92844584987535, 0.20208214786021106],
+        rtol=GOLDEN_RTOL,
+    )
 
 
 def test_golden_ekf():
@@ -152,10 +170,30 @@ def test_golden_ekf():
     )
     P_expected = np.array(
         [
-            [5.6170465173478290e-01, 3.2235492956264544e-02, 6.3168510064340022e-01, -1.3483554490996419e-02],
-            [3.2235492956264544e-02, 2.4743189516305064e-01, 5.4024346394836512e-04, 2.8088658530473037e-01],
-            [6.3168510064340022e-01, 5.4024346394836512e-04, 1.0751977658370901e00, -7.3390987982936348e-02],
-            [-1.3483554490996419e-02, 2.8088658530473037e-01, -7.3390987982936348e-02, 4.3944589502397136e-01],
+            [
+                5.6170465173478290e-01,
+                3.2235492956264544e-02,
+                6.3168510064340022e-01,
+                -1.3483554490996419e-02,
+            ],
+            [
+                3.2235492956264544e-02,
+                2.4743189516305064e-01,
+                5.4024346394836512e-04,
+                2.8088658530473037e-01,
+            ],
+            [
+                6.3168510064340022e-01,
+                5.4024346394836512e-04,
+                1.0751977658370901e00,
+                -7.3390987982936348e-02,
+            ],
+            [
+                -1.3483554490996419e-02,
+                2.8088658530473037e-01,
+                -7.3390987982936348e-02,
+                4.3944589502397136e-01,
+            ],
         ]
     )
     np.testing.assert_allclose(res.P_post[-1], P_expected, rtol=GOLDEN_RTOL)

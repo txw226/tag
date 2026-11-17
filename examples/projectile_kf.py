@@ -21,7 +21,13 @@ ACCEL_STD = 0.5  # m/s^2, gusts
 MEAS_STD = 2.0  # m, position sensor noise
 VEL_STD = 5.0  # m/s, initial velocity uncertainty
 
-COLORS = {"truth": "#1f2937", "meas": "#9ca3af", "kf": "#2563eb", "x": "#2563eb", "y": "#dc2626"}
+COLORS = {
+    "truth": "#1f2937",
+    "meas": "#9ca3af",
+    "kf": "#2563eb",
+    "x": "#2563eb",
+    "y": "#dc2626",
+}
 
 
 def main() -> None:
@@ -49,8 +55,12 @@ def main() -> None:
     meas_rmse = rmse(meas - truth[:, :2])
     kf_rmse = rmse(est[:, :2] - truth[:, :2])
     print(f"steps: {len(t)}  flight time: {t[-1]:.2f} s")
-    print(f"position RMSE  measurements: {meas_rmse:.2f} m   Kalman filter: {kf_rmse:.2f} m")
-    print(f"final velocity error: {np.linalg.norm(est[-1, 2:] - truth[-1, 2:]):.2f} m/s")
+    print(
+        f"position RMSE  measurements: {meas_rmse:.2f} m   Kalman filter: {kf_rmse:.2f} m"
+    )
+    print(
+        f"final velocity error: {np.linalg.norm(est[-1, 2:] - truth[-1, 2:]):.2f} m/s"
+    )
 
     fig = make_subplots(
         rows=2,
@@ -62,19 +72,37 @@ def main() -> None:
 
     # 1. Trajectory
     fig.add_trace(
-        go.Scatter(x=meas[:, 0], y=meas[:, 1], mode="markers", name="measurements",
-                   marker={"color": COLORS["meas"], "size": 5}),
-        row=1, col=1,
+        go.Scatter(
+            x=meas[:, 0],
+            y=meas[:, 1],
+            mode="markers",
+            name="measurements",
+            marker={"color": COLORS["meas"], "size": 5},
+        ),
+        row=1,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=truth[:, 0], y=truth[:, 1], mode="lines", name="truth",
-                   line={"color": COLORS["truth"], "width": 2}),
-        row=1, col=1,
+        go.Scatter(
+            x=truth[:, 0],
+            y=truth[:, 1],
+            mode="lines",
+            name="truth",
+            line={"color": COLORS["truth"], "width": 2},
+        ),
+        row=1,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=est[:, 0], y=est[:, 1], mode="lines", name="Kalman estimate",
-                   line={"color": COLORS["kf"], "width": 2, "dash": "dash"}),
-        row=1, col=1,
+        go.Scatter(
+            x=est[:, 0],
+            y=est[:, 1],
+            mode="lines",
+            name="Kalman estimate",
+            line={"color": COLORS["kf"], "width": 2, "dash": "dash"},
+        ),
+        row=1,
+        col=1,
     )
 
     # 2. Position error with ±2σ bands
@@ -82,9 +110,15 @@ def main() -> None:
         err = est[:, i] - truth[:, i]
         band(fig, t, np.zeros_like(t), sig[:, i], COLORS[axis], f"±2σ {axis}", 2, 1)
         fig.add_trace(
-            go.Scatter(x=t, y=err, mode="lines", name=f"{axis} error",
-                       line={"color": COLORS[axis], "width": 1.5}),
-            row=2, col=1,
+            go.Scatter(
+                x=t,
+                y=err,
+                mode="lines",
+                name=f"{axis} error",
+                line={"color": COLORS[axis], "width": 1.5},
+            ),
+            row=2,
+            col=1,
         )
 
     # 3. Velocity: estimate (with ±2σ) vs truth; never measured directly
@@ -92,14 +126,26 @@ def main() -> None:
         color = COLORS[axis]
         band(fig, t, est[:, i], sig[:, i], color, f"±2σ v{axis}", 2, 2)
         fig.add_trace(
-            go.Scatter(x=t, y=truth[:, i], mode="lines", name=f"v{axis} truth",
-                       line={"color": COLORS["truth"], "width": 1.5}),
-            row=2, col=2,
+            go.Scatter(
+                x=t,
+                y=truth[:, i],
+                mode="lines",
+                name=f"v{axis} truth",
+                line={"color": COLORS["truth"], "width": 1.5},
+            ),
+            row=2,
+            col=2,
         )
         fig.add_trace(
-            go.Scatter(x=t, y=est[:, i], mode="lines", name=f"v{axis} estimate",
-                       line={"color": color, "width": 1.5, "dash": "dash"}),
-            row=2, col=2,
+            go.Scatter(
+                x=t,
+                y=est[:, i],
+                mode="lines",
+                name=f"v{axis} estimate",
+                line={"color": color, "width": 1.5, "dash": "dash"},
+            ),
+            row=2,
+            col=2,
         )
 
     fig.update_xaxes(title_text="x (m)", row=1, col=1)

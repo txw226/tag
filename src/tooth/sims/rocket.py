@@ -49,7 +49,9 @@ SCALE_HEIGHT = 8500.0  # m
 DEFAULT_DIAMETER = 0.11  # m
 
 
-def air_density(y: float | NDArray, rho0: float = RHO0, scale_height: float = SCALE_HEIGHT) -> float | NDArray:
+def air_density(
+    y: float | NDArray, rho0: float = RHO0, scale_height: float = SCALE_HEIGHT
+) -> float | NDArray:
     """Exponential-atmosphere density at altitude ``y`` (m)."""
     return rho0 * np.exp(-np.asarray(y) / scale_height)
 
@@ -126,8 +128,12 @@ class RocketModel:
         if speed > 0:
             vv = np.outer(v, v) / speed**2
             # thrust (T/m) v/|v|  and  drag -kappa rho Cd |v| v
-            A[2:4, 2:4] = (thrust / mass) * (np.eye(2) - vv) / speed - kappa * rho * cd * speed * (np.eye(2) + vv)
-            A[2:4, 1] = kappa * rho * cd * speed * v / self.scale_height  # d rho/dy = -rho/H
+            A[2:4, 2:4] = (thrust / mass) * (
+                np.eye(2) - vv
+            ) / speed - kappa * rho * cd * speed * (np.eye(2) + vv)
+            A[2:4, 1] = (
+                kappa * rho * cd * speed * v / self.scale_height
+            )  # d rho/dy = -rho/H
             A[2:4, 4] = -kappa * rho * speed * v
         return A
 
@@ -139,7 +145,9 @@ class RocketModel:
     def F_jac(self, x: NDArray, u: NDArray) -> NDArray:
         """Exact Jacobian of :meth:`f`."""
         x = np.asarray(x, dtype=float)
-        return rk4_step(lambda t, s: self.deriv(s, u), x, self.dt, lambda t, s: self.deriv_jac(s, u))[1]
+        return rk4_step(
+            lambda t, s: self.deriv(s, u), x, self.dt, lambda t, s: self.deriv_jac(s, u)
+        )[1]
 
 
 @dataclass
@@ -164,7 +172,9 @@ def make_model(
     return RocketModel(dt=dt, area=np.pi * (0.5 * diameter) ** 2, g=g, Q=Q)
 
 
-def rail_exit_state(speed: float = 25.0, angle_deg: float = 85.0, height: float = 5.0) -> NDArray:
+def rail_exit_state(
+    speed: float = 25.0, angle_deg: float = 85.0, height: float = 5.0
+) -> NDArray:
     """[x, y, vx, vy] leaving a launch rail at ``angle_deg`` above horizontal."""
     th = np.radians(angle_deg)
     return np.array([0.0, height, speed * np.cos(th), speed * np.sin(th)])
@@ -206,15 +216,24 @@ def simulate(
             # Thrust held at its exact mean over the substep: evaluating the step
             # function at RK4's stage times would lose impulse at burnout.
             thrust = motor.mean_thrust(t0, t0 + h)
-            x = rk4_step(lambda t, s, thrust=thrust, gust=gust: deriv(t, s, thrust, gust), x, h, t=t0)
+            x = rk4_step(
+                lambda t, s, thrust=thrust, gust=gust: deriv(t, s, thrust, gust),
+                x,
+                h,
+                t=t0,
+            )
         if x[3] < 0:
             break
         states.append(x)
 
     truth = np.array(states)
     t = dt * np.arange(len(truth))
-    controls = np.array([motor.control(t0, t1) for t0, t1 in itertools.pairwise(t)]).reshape(-1, 2)
-    return RocketRun(t=t, truth=truth, cd=cd, controls=controls, motor=motor, model=model)
+    controls = np.array(
+        [motor.control(t0, t1) for t0, t1 in itertools.pairwise(t)]
+    ).reshape(-1, 2)
+    return RocketRun(
+        t=t, truth=truth, cd=cd, controls=controls, motor=motor, model=model
+    )
 
 
 def make_filter(
@@ -233,4 +252,6 @@ def make_filter(
     """
     x0 = np.concatenate([np.asarray(x0_guess, dtype=float).reshape(4), [cd_guess]])
     P0 = np.diag([pos_std**2, pos_std**2, vel_std**2, vel_std**2, cd_std**2])
-    return ExtendedKalmanFilter(f=model.f, h=None, Q=model.Q, R=None, x0=x0, P0=P0, F_jac=model.F_jac)
+    return ExtendedKalmanFilter(
+        f=model.f, h=None, Q=model.Q, R=None, x0=x0, P0=P0, F_jac=model.F_jac
+    )
