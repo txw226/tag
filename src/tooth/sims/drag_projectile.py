@@ -28,6 +28,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from tooth.kalman import ExtendedKalmanFilter
 from tooth.sensors import RangeBearingRadar
+from tooth.sims._integrate import rk4_step
 from tooth.sims.projectile import G_EARTH, launch_state, model_matrices
 
 __all__ = [
@@ -80,28 +81,13 @@ class DragProjectileModel:
     def rk4_step(
         self, x: NDArray, dt: float, accel: NDArray | None = None, jacobian: bool = False
     ) -> NDArray | tuple[NDArray, NDArray]:
-        """One RK4 step; with ``jacobian=True`` also return d(x_next)/dx.
-
-        The Jacobian is chained through the four stages, so it is the exact
-        derivative of this discrete map (not an approximation of the flow's).
-        """
-        I = np.eye(4)
-        k1 = self.deriv(x, accel)
-        x2 = x + 0.5 * dt * k1
-        k2 = self.deriv(x2, accel)
-        x3 = x + 0.5 * dt * k2
-        k3 = self.deriv(x3, accel)
-        x4 = x + dt * k3
-        k4 = self.deriv(x4, accel)
-        x_next = x + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-        if not jacobian:
-            return x_next
-
-        J1 = self.deriv_jac(x)
-        J2 = self.deriv_jac(x2) @ (I + 0.5 * dt * J1)
-        J3 = self.deriv_jac(x3) @ (I + 0.5 * dt * J2)
-        J4 = self.deriv_jac(x4) @ (I + dt * J3)
-        return x_next, I + dt / 6 * (J1 + 2 * J2 + 2 * J3 + J4)
+        """One RK4 step; with ``jacobian=True`` also return its exact Jacobian d(x_next)/dx."""
+        return rk4_step(
+            lambda t, s: self.deriv(s, accel),
+            x,
+            dt,
+            (lambda t, s: self.deriv_jac(s)) if jacobian else None,
+        )
 
     def f(self, x: NDArray, u: NDArray | None = None) -> NDArray:
         """Filter transition: one gust-free RK4 step over ``dt``. ``u`` is unused."""
