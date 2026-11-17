@@ -79,7 +79,11 @@ class DragProjectileModel:
         return A
 
     def rk4_step(
-        self, x: NDArray, dt: float, accel: NDArray | None = None, jacobian: bool = False
+        self,
+        x: NDArray,
+        dt: float,
+        accel: NDArray | None = None,
+        jacobian: bool = False,
     ) -> NDArray | tuple[NDArray, NDArray]:
         """One RK4 step; with ``jacobian=True`` also return its exact Jacobian d(x_next)/dx."""
         return rk4_step(
@@ -209,7 +213,14 @@ def make_filter(
     P0[:2, :2] = radar.position_cov(z0)
     P0[2:, 2:] = velocity_std**2 * np.eye(2)
     return ExtendedKalmanFilter(
-        f=m.f, h=radar.h, Q=m.Q, R=radar.R, x0=x0, P0=P0, F_jac=m.F_jac, H_jac=radar.H_jac,
+        f=m.f,
+        h=radar.h,
+        Q=m.Q,
+        R=radar.R,
+        x0=x0,
+        P0=P0,
+        F_jac=m.F_jac,
+        H_jac=radar.H_jac,
         residual=radar.residual,
     )
 

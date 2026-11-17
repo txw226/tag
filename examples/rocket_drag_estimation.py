@@ -55,7 +55,10 @@ def main() -> None:
 
     radar = RangeBearingRadar([-2000.0, 0.0], range_std=5.0, bearing_std=0.001)
     gnss = GnssPosition(std=3.0, every=2)
-    z_radar, z_gnss = radar.measure_series(run.truth, rng), gnss.measure_series(run.truth, rng)
+    z_radar, z_gnss = (
+        radar.measure_series(run.truth, rng),
+        gnss.measure_series(run.truth, rng),
+    )
     streams = [(radar, z_radar[1:]), (gnss, z_gnss[1:])]
 
     results = {}
@@ -94,63 +97,140 @@ def main() -> None:
     # 1. Trajectory with GNSS fixes and the radar
     g = z_gnss
     fig.add_trace(
-        go.Scatter(x=g[:, 0], y=g[:, 1], mode="markers", name="GNSS fixes",
-                   marker={"color": COLORS["meas"], "size": 4}),
-        row=1, col=1,
+        go.Scatter(
+            x=g[:, 0],
+            y=g[:, 1],
+            mode="markers",
+            name="GNSS fixes",
+            marker={"color": COLORS["meas"], "size": 4},
+        ),
+        row=1,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=truth[:, 0], y=truth[:, 1], mode="lines", name="truth",
-                   line={"color": COLORS["truth"], "width": 2}),
-        row=1, col=1,
+        go.Scatter(
+            x=truth[:, 0],
+            y=truth[:, 1],
+            mode="lines",
+            name="truth",
+            line={"color": COLORS["truth"], "width": 2},
+        ),
+        row=1,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=est[:, 0], y=est[:, 1], mode="lines", name="EKF estimating Cd",
-                   line={"color": COLORS["est"], "width": 2, "dash": "dash"}),
-        row=1, col=1,
+        go.Scatter(
+            x=est[:, 0],
+            y=est[:, 1],
+            mode="lines",
+            name="EKF estimating Cd",
+            line={"color": COLORS["est"], "width": 2, "dash": "dash"},
+        ),
+        row=1,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=fixed[:, 0], y=fixed[:, 1], mode="lines", name=f"EKF with fixed Cd = {CD_NOMINAL}",
-                   line={"color": COLORS["fixed"], "width": 1.5, "dash": "dot"}),
-        row=1, col=1,
+        go.Scatter(
+            x=fixed[:, 0],
+            y=fixed[:, 1],
+            mode="lines",
+            name=f"EKF with fixed Cd = {CD_NOMINAL}",
+            line={"color": COLORS["fixed"], "width": 1.5, "dash": "dot"},
+        ),
+        row=1,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=[radar.position[0]], y=[radar.position[1]], mode="markers", name="radar",
-                   marker={"color": COLORS["radar"], "size": 12, "symbol": "triangle-up"}),
-        row=1, col=1,
+        go.Scatter(
+            x=[radar.position[0]],
+            y=[radar.position[1]],
+            mode="markers",
+            name="radar",
+            marker={"color": COLORS["radar"], "size": 12, "symbol": "triangle-up"},
+        ),
+        row=1,
+        col=1,
     )
 
     # 2. Speed, with the burn phase shaded
     fig.add_trace(
-        go.Scatter(x=t, y=speed, mode="lines", name="true speed", showlegend=False,
-                   line={"color": COLORS["truth"], "width": 2}),
-        row=1, col=2,
+        go.Scatter(
+            x=t,
+            y=speed,
+            mode="lines",
+            name="true speed",
+            showlegend=False,
+            line={"color": COLORS["truth"], "width": 2},
+        ),
+        row=1,
+        col=2,
     )
-    fig.add_vrect(x0=0, x1=motor.burn_time, fillcolor=COLORS["burn"], opacity=0.1, line_width=0, row=1, col=2)
+    fig.add_vrect(
+        x0=0,
+        x1=motor.burn_time,
+        fillcolor=COLORS["burn"],
+        opacity=0.1,
+        line_width=0,
+        row=1,
+        col=2,
+    )
 
     # 3. Cd estimate with ±2σ and the truth
     band(fig, t, est[:, 4], sig[:, 4], COLORS["est"], "±2σ Cd", 2, 1)
     fig.add_trace(
-        go.Scatter(x=t, y=np.full_like(t, cd_true), mode="lines", name="true Cd",
-                   line={"color": COLORS["truth"], "width": 1.5}),
-        row=2, col=1,
+        go.Scatter(
+            x=t,
+            y=np.full_like(t, cd_true),
+            mode="lines",
+            name="true Cd",
+            line={"color": COLORS["truth"], "width": 1.5},
+        ),
+        row=2,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=t, y=est[:, 4], mode="lines", name="Cd estimate",
-                   line={"color": COLORS["est"], "width": 2}),
-        row=2, col=1,
+        go.Scatter(
+            x=t,
+            y=est[:, 4],
+            mode="lines",
+            name="Cd estimate",
+            line={"color": COLORS["est"], "width": 2},
+        ),
+        row=2,
+        col=1,
     )
-    fig.add_vrect(x0=0, x1=motor.burn_time, fillcolor=COLORS["burn"], opacity=0.1, line_width=0, row=2, col=1)
+    fig.add_vrect(
+        x0=0,
+        x1=motor.burn_time,
+        fillcolor=COLORS["burn"],
+        opacity=0.1,
+        line_width=0,
+        row=2,
+        col=1,
+    )
 
     # 4. Position error norms
     fig.add_trace(
-        go.Scatter(x=t, y=np.linalg.norm(err_est, axis=1), mode="lines", name="error, estimating Cd",
-                   line={"color": COLORS["est"], "width": 1.5}),
-        row=2, col=2,
+        go.Scatter(
+            x=t,
+            y=np.linalg.norm(err_est, axis=1),
+            mode="lines",
+            name="error, estimating Cd",
+            line={"color": COLORS["est"], "width": 1.5},
+        ),
+        row=2,
+        col=2,
     )
     fig.add_trace(
-        go.Scatter(x=t, y=np.linalg.norm(err_fixed, axis=1), mode="lines", name="error, fixed Cd",
-                   line={"color": COLORS["fixed"], "width": 1.5}),
-        row=2, col=2,
+        go.Scatter(
+            x=t,
+            y=np.linalg.norm(err_fixed, axis=1),
+            mode="lines",
+            name="error, fixed Cd",
+            line={"color": COLORS["fixed"], "width": 1.5},
+        ),
+        row=2,
+        col=2,
     )
 
     fig.update_xaxes(title_text="downrange (m)", row=1, col=1)
@@ -163,7 +243,7 @@ def main() -> None:
     fig.update_yaxes(title_text="|error| (m)", row=2, col=2)
     fig.update_layout(
         title=f"Sounding rocket: Cd {cd_true:.3f} estimated as {est[-1, 4]:.3f} ± {sig[-1, 4]:.3f}. "
-              f"Position RMSE {rmse(err_est):.2f} m (fixed Cd: {rmse(err_fixed):.2f} m)",
+        f"Position RMSE {rmse(err_est):.2f} m (fixed Cd: {rmse(err_fixed):.2f} m)",
         template="plotly_white",
         height=850,
         hovermode="x unified",

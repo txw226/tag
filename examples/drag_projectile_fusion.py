@@ -50,8 +50,22 @@ def make_sensors() -> list:
     # metres of a camera makes its projection too nonlinear for the EKF.
     return [
         GnssPosition(std=2.0, every=10),
-        PinholeCamera([-50.0, 1.0], np.radians(18), focal_px=1000.0, pixel_std=3.0, width_px=300.0, name="cam L"),
-        PinholeCamera([190.0, 1.0], np.radians(162), focal_px=1000.0, pixel_std=3.0, width_px=300.0, name="cam R"),
+        PinholeCamera(
+            [-50.0, 1.0],
+            np.radians(18),
+            focal_px=1000.0,
+            pixel_std=3.0,
+            width_px=300.0,
+            name="cam L",
+        ),
+        PinholeCamera(
+            [190.0, 1.0],
+            np.radians(162),
+            focal_px=1000.0,
+            pixel_std=3.0,
+            width_px=300.0,
+            name="cam R",
+        ),
     ]
 
 
@@ -88,7 +102,11 @@ def main() -> None:
         zs[s.name] = z
     by_name = {s.name: s for s in sensors}
 
-    configs = {"GNSS": ["GNSS"], "stereo": ["cam L", "cam R"], "fused": ["GNSS", "cam L", "cam R"]}
+    configs = {
+        "GNSS": ["GNSS"],
+        "stereo": ["cam L", "cam R"],
+        "fused": ["GNSS", "cam L", "cam R"],
+    }
     model = make_model(DT, ACCEL_STD)
     est, sig = {}, {}
     for name, names in configs.items():
@@ -122,59 +140,127 @@ def main() -> None:
     for cam in sensors[1:]:
         wx, wy = fov_wedge(cam, 260.0)
         fig.add_trace(
-            go.Scatter(x=wx, y=wy, fill="toself", fillcolor=COLORS[cam.name], opacity=0.1, mode="lines",
-                       line={"width": 0}, name=f"{cam.name} field of view", hoverinfo="skip"),
-            row=1, col=1,
+            go.Scatter(
+                x=wx,
+                y=wy,
+                fill="toself",
+                fillcolor=COLORS[cam.name],
+                opacity=0.1,
+                mode="lines",
+                line={"width": 0},
+                name=f"{cam.name} field of view",
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=1,
         )
         fig.add_trace(
-            go.Scatter(x=[cam.position[0]], y=[cam.position[1]], mode="markers", name=cam.name,
-                       marker={"color": COLORS[cam.name], "size": 12, "symbol": "square"}),
-            row=1, col=1,
+            go.Scatter(
+                x=[cam.position[0]],
+                y=[cam.position[1]],
+                mode="markers",
+                name=cam.name,
+                marker={"color": COLORS[cam.name], "size": 12, "symbol": "square"},
+            ),
+            row=1,
+            col=1,
         )
     g = zs["GNSS"]
     fig.add_trace(
-        go.Scatter(x=g[:, 0], y=g[:, 1], mode="markers", name="GNSS fixes",
-                   marker={"color": COLORS["GNSS"], "size": 7, "symbol": "x"}),
-        row=1, col=1,
+        go.Scatter(
+            x=g[:, 0],
+            y=g[:, 1],
+            mode="markers",
+            name="GNSS fixes",
+            marker={"color": COLORS["GNSS"], "size": 7, "symbol": "x"},
+        ),
+        row=1,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=truth[:, 0], y=truth[:, 1], mode="lines", name="truth",
-                   line={"color": COLORS["truth"], "width": 2}),
-        row=1, col=1,
+        go.Scatter(
+            x=truth[:, 0],
+            y=truth[:, 1],
+            mode="lines",
+            name="truth",
+            line={"color": COLORS["truth"], "width": 2},
+        ),
+        row=1,
+        col=1,
     )
     for name, e in est.items():
         fig.add_trace(
-            go.Scatter(x=e[:, 0], y=e[:, 1], mode="lines", name=f"{name} estimate",
-                       line={"color": COLORS[name], "width": 1.5, "dash": "dash"}),
-            row=1, col=1,
+            go.Scatter(
+                x=e[:, 0],
+                y=e[:, 1],
+                mode="lines",
+                name=f"{name} estimate",
+                line={"color": COLORS[name], "width": 1.5, "dash": "dash"},
+            ),
+            row=1,
+            col=1,
         )
 
     # 2. Position error norm for each configuration
     for name, e in errs.items():
         fig.add_trace(
-            go.Scatter(x=t, y=np.linalg.norm(e, axis=1), mode="lines", name=f"{name} error",
-                       line={"color": COLORS[name], "width": 1.5}),
-            row=2, col=1,
+            go.Scatter(
+                x=t,
+                y=np.linalg.norm(e, axis=1),
+                mode="lines",
+                name=f"{name} error",
+                line={"color": COLORS[name], "width": 1.5},
+            ),
+            row=2,
+            col=1,
         )
-    fig.add_vrect(x0=GNSS_OUTAGE[0], x1=GNSS_OUTAGE[1], fillcolor=COLORS["GNSS"], opacity=0.12,
-                  line_width=0, row=2, col=1)
+    fig.add_vrect(
+        x0=GNSS_OUTAGE[0],
+        x1=GNSS_OUTAGE[1],
+        fillcolor=COLORS["GNSS"],
+        opacity=0.12,
+        line_width=0,
+        row=2,
+        col=1,
+    )
 
     # 3. Fused x / y error with ±2σ bands
     for i, axis in enumerate("xy"):
-        band(fig, t, np.zeros_like(t), sig["fused"][:, i], COLORS[axis], f"±2σ {axis}", 2, 2)
+        band(
+            fig,
+            t,
+            np.zeros_like(t),
+            sig["fused"][:, i],
+            COLORS[axis],
+            f"±2σ {axis}",
+            2,
+            2,
+        )
         fig.add_trace(
-            go.Scatter(x=t, y=errs["fused"][:, i], mode="lines", name=f"fused {axis} error",
-                       line={"color": COLORS[axis], "width": 1.5}),
-            row=2, col=2,
+            go.Scatter(
+                x=t,
+                y=errs["fused"][:, i],
+                mode="lines",
+                name=f"fused {axis} error",
+                line={"color": COLORS[axis], "width": 1.5},
+            ),
+            row=2,
+            col=2,
         )
 
     # 4. When each sensor delivered a measurement
     for row, name in enumerate(["GNSS", "cam L", "cam R"]):
         have = ~np.isnan(zs[name][:, 0])
         fig.add_trace(
-            go.Scatter(x=t[have], y=np.full(have.sum(), name), mode="markers", showlegend=False,
-                       marker={"color": COLORS[name], "size": 5, "symbol": "line-ns-open"}),
-            row=3, col=1,
+            go.Scatter(
+                x=t[have],
+                y=np.full(have.sum(), name),
+                mode="markers",
+                showlegend=False,
+                marker={"color": COLORS[name], "size": 5, "symbol": "line-ns-open"},
+            ),
+            row=3,
+            col=1,
         )
 
     fig.update_xaxes(title_text="x (m)", range=[-60, 200], row=1, col=1)
@@ -186,7 +272,7 @@ def main() -> None:
     fig.update_xaxes(title_text="t (s)", range=[0, t[-1]], row=3, col=1)
     fig.update_layout(
         title="Sensor fusion, drag projectile. Position RMSE: "
-              + ", ".join(f"{name} {rmse(e):.2f} m" for name, e in errs.items()),
+        + ", ".join(f"{name} {rmse(e):.2f} m" for name, e in errs.items()),
         template="plotly_white",
         height=1000,
         hovermode="closest",

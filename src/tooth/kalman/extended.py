@@ -155,7 +155,11 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         if z is None:
             return
         if sensor is not None:
-            h, H_jac, residual = sensor.h, getattr(sensor, "H_jac", None), getattr(sensor, "residual", None)
+            h, H_jac, residual = (
+                sensor.h,
+                getattr(sensor, "H_jac", None),
+                getattr(sensor, "residual", None),
+            )
             R = np.atleast_2d(np.asarray(sensor.R, dtype=float))
         elif self.h is not None:
             h, H_jac, residual, R = self.h, self.H_jac, self.residual, self.R

@@ -1,0 +1,17 @@
+# Run `uv run pre-commit install` once per clone to enable.
+# Hooks call the ruff pinned in uv.lock, so they match manual `uv run ruff` runs.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true

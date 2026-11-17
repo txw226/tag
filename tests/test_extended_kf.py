@@ -83,7 +83,14 @@ def test_custom_residual_wraps_angles():
     assert naive.y[0] < -6  # without wrapping the innovation is ~ -2pi + 0.1
 
 
-BASE = dict(f=lambda x, u: x, h=lambda x: x[:1], Q=np.eye(2), R=np.eye(1), x0=np.zeros(2), P0=np.eye(2))
+BASE = {
+    "f": lambda x, u: x,
+    "h": lambda x: x[:1],
+    "Q": np.eye(2),
+    "R": np.eye(1),
+    "x0": np.zeros(2),
+    "P0": np.eye(2),
+}
 
 
 @pytest.mark.parametrize(
@@ -126,7 +133,7 @@ def test_update_none_skips():
 
 def test_filter_copies_its_inputs():
     """In-place edits to a filter's matrices must not leak into the caller's arrays, e.g. run.model.Q."""
-    arrays = dict(Q=np.eye(2), R=np.eye(1), x0=np.zeros(2), P0=np.eye(2))
+    arrays = {"Q": np.eye(2), "R": np.eye(1), "x0": np.zeros(2), "P0": np.eye(2)}
     originals = {k: v.copy() for k, v in arrays.items()}
     ekf = ExtendedKalmanFilter(**(BASE | arrays))
     ekf.Q *= 3.0
@@ -179,7 +186,14 @@ def test_update_without_measurement_model_raises():
     with pytest.raises(ValueError, match="pass a sensor"):
         ekf.update([1.0])
     with pytest.raises(ValueError, match="h and R must be given together"):
-        ExtendedKalmanFilter(f=lambda x, u: x, h=lambda x: x, Q=np.eye(2), R=None, x0=np.zeros(2), P0=np.eye(2))
+        ExtendedKalmanFilter(
+            f=lambda x, u: x,
+            h=lambda x: x,
+            Q=np.eye(2),
+            R=None,
+            x0=np.zeros(2),
+            P0=np.eye(2),
+        )
 
 
 def test_filter_sensors_validates_streams():

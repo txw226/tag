@@ -59,7 +59,10 @@ def test_radar_wraps_bearing_and_inverts():
     z = behind.measure_series(truth, np.random.default_rng(2))
     assert np.all(np.abs(z[:, 1]) <= np.pi)
     assert (z[:, 1] < 0).any()  # some noisy bearings wrapped to -pi side
-    np.testing.assert_allclose(behind.residual(np.array([1.0, -np.pi + 0.1]), np.array([1.0, np.pi - 0.1])), [0.0, 0.2])
+    np.testing.assert_allclose(
+        behind.residual(np.array([1.0, -np.pi + 0.1]), np.array([1.0, np.pi - 0.1])),
+        [0.0, 0.2],
+    )
 
     x = np.array([30.0, 25.0, 0.0, 0.0])
     np.testing.assert_allclose(RADAR.to_position(RADAR.h(x)), x[:2])

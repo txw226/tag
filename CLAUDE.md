@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`tooth` is a Python Kalman filtering library (linear KF + EKF) (Python >= 3.14, pinned to 3.14 in `.python-version`) managed with **uv**, using the `uv_build` backend and a `src/` layout. Dependencies: numpy, plotly (plots); pytest (dev). It also holds a standalone scratch C++ file.
+`tooth` is a Python Kalman filtering library (linear KF + EKF) (Python >= 3.14, pinned to 3.14 in `.python-version`) managed with **uv**, using the `uv_build` backend and a `src/` layout. Dependencies: numpy, plotly (plots); pytest, ruff, pre-commit (dev). All code is kept ruff-clean (check + format); the pre-commit hook enforces it, and if a hook modifies files the commit fails so the fixes can be reviewed and re-staged. It also holds a standalone scratch C++ file.
 
 ## Commands
 
@@ -18,6 +18,9 @@ uv run python examples/drag_projectile_fusion.py  # EKF fusing GNSS + two camera
 uv run python examples/rocket_drag_estimation.py  # EKF estimating a rocket's unknown Cd (state augmentation)
 uv run python examples/drag_lkf_vs_ekf.py      # drag-free LKF (true / inflated Q) vs EKF on the same GNSS; NEES/NIS, Monte Carlo (--runs N)
 uv add <pkg>   /   uv add --dev <pkg>      # add a dependency (keeps uv.lock in sync; don't hand-edit)
+uv run ruff check --fix && uv run ruff format   # lint + format (config in pyproject.toml, line length 120)
+uv run pre-commit install                  # once per clone: runs ruff check --fix + format on staged files at commit
+uv run pre-commit run --all-files          # run the hooks over the whole repo
 
 g++ src/tooth/try.cpp -o build/try && ./build/try   # scratch C++ (not part of the Python build)
 ```
@@ -39,4 +42,4 @@ The user's shell setup (`~/tooth.zshrc`) activates `.venv` automatically and def
 - `tests/test_drag_projectile.py` holds the same kind of NEES test for the EKF (gusts 2 m/s², 50 m/s launch). Its bounds also come from a 20-seed sweep, so re-derive them if those sim parameters change.
 - `tests/test_fusion.py` holds a NEES test for GNSS + two cameras, with bounds also taken from a 20-seed sweep. Keep the cameras well away from the flight path: a target within a few metres of a camera makes the projection too nonlinear, and NEES spikes above 100. Stereo-only errors are heavy-tailed, so compare RMSE over at least 20 seeds.
 - `tests/test_rocket.py` holds a NEES test over the 5-element augmented state (≈ 5), with bounds from a 20-seed sweep. It's the slowest test file (about 13 s), because each NEES call simulates 50 flights of about 270 steps.
-- `src/tooth/try.py` / `try.cpp` are scratch files.
+- `src/tooth/try.cpp` is a scratch file.
