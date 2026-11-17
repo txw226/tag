@@ -22,7 +22,13 @@ from typing import Protocol
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from tooth.kalman._base import FilterResult, KalmanFilterBase, _as_matrix, _controls, joseph_update
+from tooth.kalman._base import (
+    FilterResult,
+    KalmanFilterBase,
+    _as_matrix,
+    _controls,
+    joseph_update,
+)
 
 TransitionFn = Callable[[NDArray, NDArray | None], ArrayLike]
 MeasurementFn = Callable[[NDArray], ArrayLike]

@@ -16,11 +16,16 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
+from _plotting import band, rmse
 from plotly.subplots import make_subplots
 
-from _plotting import band, rmse
 from tooth.sensors import GnssPosition, PinholeCamera
-from tooth.sims.drag_projectile import launch_state, make_fusion_filter, make_model, simulate_trajectory
+from tooth.sims.drag_projectile import (
+    launch_state,
+    make_fusion_filter,
+    make_model,
+    simulate_trajectory,
+)
 
 DT = 0.05  # s, filter / camera rate 20 Hz
 ACCEL_STD = 0.5  # m/s^2, gusts

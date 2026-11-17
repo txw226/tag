@@ -11,9 +11,9 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
+from _plotting import band, rmse
 from plotly.subplots import make_subplots
 
-from _plotting import band, rmse
 from tooth.sims.projectile import launch_state, make_filter, simulate
 
 DT = 0.05  # s, sensor rate 20 Hz

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from tooth.kalman import ExtendedKalmanFilter, LinearKalmanFilter, numerical_jacobian
+from tooth.kalman import ExtendedKalmanFilter, numerical_jacobian
 from tooth.sims.projectile import launch_state, make_filter, simulate
 
 
@@ -138,7 +138,8 @@ def test_filter_copies_its_inputs():
 
 
 def drag_radar_run():
-    from tooth.sims.drag_projectile import launch_state as drag_launch, make_filter as drag_filter
+    from tooth.sims.drag_projectile import launch_state as drag_launch
+    from tooth.sims.drag_projectile import make_filter as drag_filter
     from tooth.sims.drag_projectile import simulate as drag_simulate
 
     x0 = drag_launch(50.0, 45.0)

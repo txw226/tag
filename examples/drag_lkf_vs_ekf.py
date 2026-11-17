@@ -24,12 +24,17 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
+from _plotting import band, chi2_bounds, rmse
 from plotly.subplots import make_subplots
 
-from _plotting import band, chi2_bounds, rmse
 from tooth.kalman import FilterResult, LinearKalmanFilter
 from tooth.sensors import GnssPosition
-from tooth.sims.drag_projectile import launch_state, make_fusion_filter, make_model, simulate_trajectory
+from tooth.sims.drag_projectile import (
+    launch_state,
+    make_fusion_filter,
+    make_model,
+    simulate_trajectory,
+)
 from tooth.sims.projectile import model_matrices
 
 DT = 0.05  # s, filter rate 20 Hz

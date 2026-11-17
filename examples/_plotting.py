@@ -49,7 +49,7 @@ def chi2_ppf(p: float, k: float) -> float:
     """Exact quantile of χ²(k): the x with CDF P(k/2, x/2) = p, found by bisection."""
     if not 0.0 < p < 1.0:
         raise ValueError(f"p must be in (0, 1), got {p}")
-    cdf = lambda x: _gammainc(0.5 * k, 0.5 * x)  # noqa: E731
+    cdf = lambda x: _gammainc(0.5 * k, 0.5 * x)
     lo, hi = 0.0, max(1.0, k)
     while cdf(hi) < p:
         lo, hi = hi, 2.0 * hi

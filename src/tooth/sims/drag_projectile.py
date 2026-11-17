@@ -33,9 +33,9 @@ from tooth.sims.projectile import G_EARTH, launch_state, model_matrices
 
 __all__ = [
     "DEFAULT_DRAG",
+    "G_EARTH",
     "DragProjectileModel",
     "DragProjectileRun",
-    "G_EARTH",
     "launch_state",
     "make_filter",
     "make_fusion_filter",

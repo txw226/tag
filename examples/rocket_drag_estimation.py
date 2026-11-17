@@ -16,9 +16,9 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
+from _plotting import band, rmse
 from plotly.subplots import make_subplots
 
-from _plotting import band, rmse
 from tooth.sensors import GnssPosition, RangeBearingRadar
 from tooth.sims.rocket import Motor, make_filter, rail_exit_state, simulate
 

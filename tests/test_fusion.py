@@ -8,7 +8,12 @@ import numpy as np
 import pytest
 
 from tooth.sensors import GnssPosition, PinholeCamera
-from tooth.sims.drag_projectile import launch_state, make_fusion_filter, make_model, simulate_trajectory
+from tooth.sims.drag_projectile import (
+    launch_state,
+    make_fusion_filter,
+    make_model,
+    simulate_trajectory,
+)
 
 DT = 0.05
 POS_STD = 0.5  # m, launch-point uncertainty
