@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -11,6 +12,12 @@ DerivFn = Callable[[float, NDArray], NDArray]
 DerivJacFn = Callable[[float, NDArray], NDArray]
 
 
+@overload
+def rk4_step(deriv: DerivFn, x: NDArray, dt: float, deriv_jac: None = None, t: float = 0.0) -> NDArray: ...
+@overload
+def rk4_step(
+    deriv: DerivFn, x: NDArray, dt: float, deriv_jac: DerivJacFn, t: float = 0.0
+) -> tuple[NDArray, NDArray]: ...
 def rk4_step(
     deriv: DerivFn,
     x: NDArray,

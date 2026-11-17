@@ -23,6 +23,7 @@ ends at apogee (vy turning negative) or ``t_max``.
 
 from __future__ import annotations
 
+import functools
 import itertools
 from dataclasses import dataclass
 
@@ -131,15 +132,24 @@ class RocketModel:
             A[2:4, 4] = -kappa * rho * speed * v
         return A
 
-    def f(self, x: NDArray, u: NDArray) -> NDArray:
+    def f(self, x: NDArray, u: NDArray | None = None) -> NDArray:
         """One RK4 step over ``dt`` with constant control u = [thrust, mass] and no gust."""
+        u = _require_control(u)
         x = np.asarray(x, dtype=float)
         return rk4_step(lambda t, s: self.deriv(s, u), x, self.dt)
 
-    def F_jac(self, x: NDArray, u: NDArray) -> NDArray:
+    def F_jac(self, x: NDArray, u: NDArray | None = None) -> NDArray:
         """Exact Jacobian of :meth:`f`."""
+        u = _require_control(u)
         x = np.asarray(x, dtype=float)
         return rk4_step(lambda t, s: self.deriv(s, u), x, self.dt, lambda t, s: self.deriv_jac(s, u))[1]
+
+
+def _require_control(u: NDArray | None) -> NDArray:
+    # The EKF passes u=None when filter() / filter_sensors() get no ``us``.
+    if u is None:
+        raise ValueError("rocket model needs control u = [thrust, mass]; pass us=run.controls")
+    return u
 
 
 @dataclass
@@ -206,12 +216,7 @@ def simulate(
             # Thrust held at its exact mean over the substep: evaluating the step
             # function at RK4's stage times would lose impulse at burnout.
             thrust = motor.mean_thrust(t0, t0 + h)
-            x = rk4_step(
-                lambda t, s, thrust=thrust, gust=gust: deriv(t, s, thrust, gust),
-                x,
-                h,
-                t=t0,
-            )
+            x = rk4_step(functools.partial(deriv, thrust=thrust, gust=gust), x, h, t=t0)
         if x[3] < 0:
             break
         states.append(x)

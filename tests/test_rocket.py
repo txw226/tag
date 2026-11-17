@@ -209,3 +209,12 @@ def test_golden_run():
     assert len(run.t) == GOLDEN_STEPS
     np.testing.assert_allclose(res.x_post[-1], GOLDEN_X, rtol=1e-9)
     np.testing.assert_allclose(res.P_post[-1], GOLDEN_P, rtol=1e-9)
+
+
+def test_filter_without_controls_raises_clearly():
+    rng = np.random.default_rng(0)
+    run = random_run(rng, ACCEL_STD)
+    streams = [(s, s.measure_series(run.truth, rng)[1:]) for s in sensors()]
+    ekf = make_filter(run.model, rail_exit_state(), POS_STD, VEL_STD, CD_NOMINAL, CD_STD)
+    with pytest.raises(ValueError, match="pass us=run.controls"):
+        ekf.filter_sensors(streams)

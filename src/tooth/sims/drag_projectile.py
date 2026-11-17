@@ -22,6 +22,7 @@ same ``Gamma`` as the drag-free model; under drag this is an approximation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal, overload
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -57,6 +58,12 @@ class DragProjectileModel:
     Gamma: NDArray  # (4, 2) maps acceleration noise into the state
     radar: RangeBearingRadar | None = None
 
+    def require_radar(self) -> RangeBearingRadar:
+        """The model's radar; raises if it was built without radar noise levels."""
+        if self.radar is None:
+            raise ValueError("model has no radar; build it with range_noise_std and bearing_noise_std")
+        return self.radar
+
     # --- dynamics -----------------------------------------------------------
 
     def deriv(self, x: NDArray, accel: NDArray | None = None) -> NDArray:
@@ -78,6 +85,14 @@ class DragProjectileModel:
             A[2:, 2:] = -self.k * (speed * np.eye(2) + np.outer(v, v) / speed)
         return A
 
+    @overload
+    def rk4_step(
+        self, x: NDArray, dt: float, accel: NDArray | None = None, jacobian: Literal[False] = False
+    ) -> NDArray: ...
+    @overload
+    def rk4_step(
+        self, x: NDArray, dt: float, accel: NDArray | None = None, *, jacobian: Literal[True]
+    ) -> tuple[NDArray, NDArray]: ...
     def rk4_step(
         self,
         x: NDArray,
@@ -86,12 +101,9 @@ class DragProjectileModel:
         jacobian: bool = False,
     ) -> NDArray | tuple[NDArray, NDArray]:
         """One RK4 step; with ``jacobian=True`` also return its exact Jacobian d(x_next)/dx."""
-        return rk4_step(
-            lambda t, s: self.deriv(s, accel),
-            x,
-            dt,
-            (lambda t, s: self.deriv_jac(s)) if jacobian else None,
-        )
+        if jacobian:
+            return rk4_step(lambda t, s: self.deriv(s, accel), x, dt, lambda t, s: self.deriv_jac(s))
+        return rk4_step(lambda t, s: self.deriv(s, accel), x, dt)
 
     def f(self, x: NDArray, u: NDArray | None = None) -> NDArray:
         """Filter transition: one gust-free RK4 step over ``dt``. ``u`` is unused."""
@@ -190,7 +202,7 @@ def simulate(
     """
     m = make_model(dt, accel_noise_std, range_noise_std, bearing_noise_std, drag, radar_pos, g)
     t, truth = simulate_trajectory(x0, dt, accel_noise_std, rng, drag, t_max, substeps, g)
-    return DragProjectileRun(t=t, truth=truth, measurements=m.radar.measure_series(truth, rng), model=m)
+    return DragProjectileRun(t=t, truth=truth, measurements=m.require_radar().measure_series(truth, rng), model=m)
 
 
 def make_filter(
@@ -206,7 +218,7 @@ def make_filter(
     ``run.measurements[1:]`` afterwards.
     """
     m = run.model
-    radar = m.radar
+    radar = m.require_radar()
     z0 = run.measurements[0]
     x0 = np.concatenate([radar.to_position(z0), np.asarray(velocity_guess, dtype=float)])
     P0 = np.zeros((4, 4))
