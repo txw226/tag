@@ -55,12 +55,8 @@ def main() -> None:
     meas_rmse = rmse(meas - truth[:, :2])
     kf_rmse = rmse(est[:, :2] - truth[:, :2])
     print(f"steps: {len(t)}  flight time: {t[-1]:.2f} s")
-    print(
-        f"position RMSE  measurements: {meas_rmse:.2f} m   Kalman filter: {kf_rmse:.2f} m"
-    )
-    print(
-        f"final velocity error: {np.linalg.norm(est[-1, 2:] - truth[-1, 2:]):.2f} m/s"
-    )
+    print(f"position RMSE  measurements: {meas_rmse:.2f} m   Kalman filter: {kf_rmse:.2f} m")
+    print(f"final velocity error: {np.linalg.norm(est[-1, 2:] - truth[-1, 2:]):.2f} m/s")
 
     fig = make_subplots(
         rows=2,

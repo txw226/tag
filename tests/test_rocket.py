@@ -15,9 +15,7 @@ CD_STD = 0.10
 
 
 def sensors():
-    return RangeBearingRadar(
-        [-2000.0, 0.0], range_std=5.0, bearing_std=0.001
-    ), GnssPosition(std=3.0, every=2)
+    return RangeBearingRadar([-2000.0, 0.0], range_std=5.0, bearing_std=0.001), GnssPosition(std=3.0, every=2)
 
 
 def track(run, rng, cd_guess=CD_NOMINAL, cd_std=CD_STD, q_scale=1.0):
@@ -32,9 +30,7 @@ def track(run, rng, cd_guess=CD_NOMINAL, cd_std=CD_STD, q_scale=1.0):
 
 def random_run(rng, accel_std):
     """Rail-exit state and Cd drawn from the filter's prior."""
-    x0 = rail_exit_state() + np.array(
-        [POS_STD, POS_STD, VEL_STD, VEL_STD]
-    ) * rng.standard_normal(4)
+    x0 = rail_exit_state() + np.array([POS_STD, POS_STD, VEL_STD, VEL_STD]) * rng.standard_normal(4)
     cd = CD_NOMINAL + CD_STD * rng.standard_normal()
     return simulate(x0, cd, DT, accel_std, rng)
 
@@ -46,13 +42,9 @@ def test_rocket_equation():
     """No gravity or drag, thrust along v: speed gain = v_e ln(m0 / m_burnout)."""
     motor = Motor()
     x0 = rail_exit_state()
-    run = simulate(
-        x0, 0.0, DT, 0.0, np.random.default_rng(0), motor=motor, g=0.0, t_max=6.0
-    )
+    run = simulate(x0, 0.0, DT, 0.0, np.random.default_rng(0), motor=motor, g=0.0, t_max=6.0)
     gain = np.linalg.norm(run.truth[-1, 2:]) - np.linalg.norm(x0[2:])
-    assert gain == pytest.approx(
-        motor.exhaust_velocity * np.log(motor.mass0 / motor.mass_burnout), rel=1e-10
-    )
+    assert gain == pytest.approx(motor.exhaust_velocity * np.log(motor.mass0 / motor.mass_burnout), rel=1e-10)
 
 
 def test_unpowered_dragless_flight_is_ballistic():
@@ -60,18 +52,13 @@ def test_unpowered_dragless_flight_is_ballistic():
     run = simulate(x0, 0.0, DT, 0.0, np.random.default_rng(0), motor=Motor(thrust=0.0))
     t = run.t
     np.testing.assert_allclose(run.truth[:, 0], x0[0] + x0[2] * t, atol=1e-9)
-    np.testing.assert_allclose(
-        run.truth[:, 1], x0[1] + x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9
-    )
+    np.testing.assert_allclose(run.truth[:, 1], x0[1] + x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9)
     assert abs(t[-1] - x0[3] / G_EARTH) < DT  # stops at apogee
 
 
 def test_drag_lowers_apogee():
     x0 = rail_exit_state()
-    apogee = {
-        cd: simulate(x0, cd, DT, 0.0, np.random.default_rng(0)).truth[-1, 1]
-        for cd in (0.0, 0.3, 0.6)
-    }
+    apogee = {cd: simulate(x0, cd, DT, 0.0, np.random.default_rng(0)).truth[-1, 1] for cd in (0.0, 0.3, 0.6)}
     assert apogee[0.0] > apogee[0.3] > apogee[0.6]
 
 
@@ -83,18 +70,14 @@ def test_air_density():
 def test_motor_controls_conserve_impulse_across_burnout():
     motor = Motor(burn_time=4.03)
     assert motor.mean_thrust(4.0, 4.1) == pytest.approx(0.3 * motor.thrust)
-    run = simulate(
-        rail_exit_state(), CD_NOMINAL, DT, 0.0, np.random.default_rng(0), motor=motor
-    )
+    run = simulate(rail_exit_state(), CD_NOMINAL, DT, 0.0, np.random.default_rng(0), motor=motor)
     assert run.controls.shape == (len(run.t) - 1, 2)
     impulse = np.sum(run.controls[:, 0]) * DT
     assert impulse == pytest.approx(motor.thrust * motor.burn_time)
     np.testing.assert_allclose(run.controls[-1], [0.0, motor.mass_burnout])
 
 
-@pytest.mark.parametrize(
-    "step", [5, 39, 40, 150]
-)  # burning, last burning step, burnout step, coasting
+@pytest.mark.parametrize("step", [5, 39, 40, 150])  # burning, last burning step, burnout step, coasting
 def test_transition_jacobian_matches_numerical(step):
     run = simulate(rail_exit_state(), CD_NOMINAL, DT, 0.0, np.random.default_rng(0))
     m, u = run.model, run.controls[step]

@@ -24,9 +24,7 @@ class Sensor(ABC):
         name: label for plots and messages.
     """
 
-    def __init__(
-        self, noise_std: ArrayLike, every: int = 1, name: str | None = None
-    ) -> None:
+    def __init__(self, noise_std: ArrayLike, every: int = 1, name: str | None = None) -> None:
         if every < 1:
             raise ValueError(f"every must be >= 1, got {every}")
         self.noise_std = np.array(noise_std, dtype=float).reshape(-1)
@@ -63,9 +61,7 @@ class Sensor(ABC):
         truth = np.atleast_2d(np.asarray(truth, dtype=float))
         clean = np.array([self.h(x) for x in truth])
         z = self.wrap(clean + rng.normal(0.0, 1.0, size=clean.shape) * self.noise_std)
-        keep = np.array(
-            [k % self.every == 0 and self.visible(x) for k, x in enumerate(truth)]
-        )
+        keep = np.array([k % self.every == 0 and self.visible(x) for k, x in enumerate(truth)])
         z[~keep] = np.nan
         return z
 

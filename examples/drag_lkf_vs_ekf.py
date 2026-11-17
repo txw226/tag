@@ -39,9 +39,7 @@ from tooth.sims.projectile import model_matrices
 
 DT = 0.05  # s, filter rate 20 Hz
 ACCEL_STD = 0.5  # m/s^2, gusts (the truth's process noise)
-INFLATED_ACCEL_STD = (
-    15.0  # m/s^2, from a sweep: pooled ANEES ≈ 4 (but see the time series)
-)
+INFLATED_ACCEL_STD = 15.0  # m/s^2, from a sweep: pooled ANEES ≈ 4 (but see the time series)
 GNSS_STD = 1.5  # m per axis
 GNSS_EVERY = 2  # 10 Hz
 POS_STD = 0.5  # m, launch-point uncertainty
@@ -65,9 +63,7 @@ def prior() -> tuple[np.ndarray, np.ndarray]:
     return x0, P0
 
 
-def run_filters(
-    gnss: GnssPosition, zs: np.ndarray, x0: np.ndarray, P0: np.ndarray
-) -> dict[str, FilterResult]:
+def run_filters(gnss: GnssPosition, zs: np.ndarray, x0: np.ndarray, P0: np.ndarray) -> dict[str, FilterResult]:
     """Run every filter on measurement rows ``zs`` (steps 1..N-1)."""
     lin = model_matrices(DT, ACCEL_STD, 0.0)
     H = gnss.H_jac(x0)  # constant, since GNSS is linear
@@ -136,28 +132,16 @@ def monte_carlo(runs: int, seed: int, gnss: GnssPosition) -> dict:
         nees_all = np.array([s["nees"][name][:n] for s in sims])
         nis_all = np.array([s["nis"][name][:n] for s in sims])
         anees_t[name] = nees_all.mean(axis=0)
-        anis_t[name] = nis_all.mean(
-            axis=0
-        )  # NaN on steps without GNSS (same steps in every run)
+        anis_t[name] = nis_all.mean(axis=0)  # NaN on steps without GNSS (same steps in every run)
         a_nis = anis_t[name][~np.isnan(anis_t[name])]
-        pos_err = np.concatenate(
-            [s["est"][name][:, :2] - s["truth"][:, :2] for s in sims]
-        )
-        vel_err = np.concatenate(
-            [s["est"][name][:, 2:] - s["truth"][:, 2:] for s in sims]
-        )
+        pos_err = np.concatenate([s["est"][name][:, :2] - s["truth"][:, :2] for s in sims])
+        vel_err = np.concatenate([s["est"][name][:, 2:] - s["truth"][:, 2:] for s in sims])
         summary[name] = {
             "pos RMSE (m)": rmse(pos_err),
             "vel RMSE (m/s)": rmse(vel_err),
-            "ANEES (expect 4)": float(
-                np.concatenate([s["nees"][name] for s in sims]).mean()
-            ),
-            "ANEES in bounds": float(
-                np.mean((anees_t[name] > nees_lo) & (anees_t[name] < nees_hi))
-            ),
-            "ANIS (expect 2)": float(
-                np.nanmean(np.concatenate([s["nis"][name] for s in sims]))
-            ),
+            "ANEES (expect 4)": float(np.concatenate([s["nees"][name] for s in sims]).mean()),
+            "ANEES in bounds": float(np.mean((anees_t[name] > nees_lo) & (anees_t[name] < nees_hi))),
+            "ANIS (expect 2)": float(np.nanmean(np.concatenate([s["nis"][name] for s in sims]))),
             "ANIS in bounds": float(np.mean((a_nis > nis_lo) & (a_nis < nis_hi))),
         }
     t = DT * np.arange(1, n + 1)
@@ -196,9 +180,7 @@ def bounds(fig, t: np.ndarray, lo_hi: tuple[float, float], row: int, col: int) -
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--seed", type=int, default=3)
-    parser.add_argument(
-        "--runs", type=int, default=50, help="Monte Carlo runs for ANEES / ANIS"
-    )
+    parser.add_argument("--runs", type=int, default=50, help="Monte Carlo runs for ANEES / ANIS")
     parser.add_argument("--no-show", action="store_true", help="don't open a browser")
     args = parser.parse_args()
 
@@ -210,13 +192,7 @@ def main() -> None:
     print(f"steps: {len(t)}  flight time: {t[-1]:.2f} s  range: {truth[-1, 0]:.1f} m")
     print(f"Monte Carlo over {args.runs} runs:")
     for name, row in mc["summary"].items():
-        print(
-            f"  {name:15s} "
-            + "  ".join(
-                f"{k} {v:.0%}" if "bounds" in k else f"{k} {v:.2f}"
-                for k, v in row.items()
-            )
-        )
+        print(f"  {name:15s} " + "  ".join(f"{k} {v:.0%}" if "bounds" in k else f"{k} {v:.2f}" for k, v in row.items()))
 
     fig = make_subplots(
         rows=6,
@@ -382,18 +358,10 @@ def main() -> None:
             cells={
                 "values": [list(FILTERS)]
                 + [
-                    [
-                        f"{mc['summary'][n][c]:.0%}"
-                        if "bounds" in c
-                        else f"{mc['summary'][n][c]:.2f}"
-                        for n in FILTERS
-                    ]
+                    [f"{mc['summary'][n][c]:.0%}" if "bounds" in c else f"{mc['summary'][n][c]:.2f}" for n in FILTERS]
                     for c in cols
                 ],
-                "font": {
-                    "color": [[COLORS[n] for n in FILTERS]]
-                    + [["#111827"] * 3] * len(cols)
-                },
+                "font": {"color": [[COLORS[n] for n in FILTERS]] + [["#111827"] * 3] * len(cols)},
                 "align": "left",
                 "height": 28,
             },

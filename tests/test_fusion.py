@@ -88,9 +88,7 @@ def test_fusion_beats_each_source_alone():
         for name, sensor_names in CONFIGS.items():
             err = run_filter(streams, sensor_names, 0.5).x_post[:, :2] - truth[1:, :2]
             sq_err[name].append(np.sum(err**2, axis=1))
-    rmse = {
-        name: float(np.sqrt(np.concatenate(v).mean())) for name, v in sq_err.items()
-    }
+    rmse = {name: float(np.sqrt(np.concatenate(v).mean())) for name, v in sq_err.items()}
     assert rmse["fused"] < 0.5 * rmse["GNSS"]
     assert rmse["fused"] < rmse["stereo"]
 

@@ -5,9 +5,7 @@ from tooth.kalman import LinearKalmanFilter
 
 
 def scalar_filter(sigma: float, x0: float) -> LinearKalmanFilter:
-    return LinearKalmanFilter(
-        F=[[1.0]], H=[[1.0]], Q=[[0.0]], R=[[sigma**2]], x0=[x0], P0=[[sigma**2]]
-    )
+    return LinearKalmanFilter(F=[[1.0]], H=[[1.0]], Q=[[0.0]], R=[[sigma**2]], x0=[x0], P0=[[sigma**2]])
 
 
 @pytest.mark.parametrize(

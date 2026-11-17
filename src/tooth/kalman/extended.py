@@ -45,9 +45,7 @@ class MeasurementModel(Protocol):
     def residual(self, z: NDArray, z_pred: NDArray) -> ArrayLike: ...
 
 
-def numerical_jacobian(
-    fn: Callable[[NDArray], ArrayLike], x: ArrayLike, eps: float = 1e-6
-) -> NDArray:
+def numerical_jacobian(fn: Callable[[NDArray], ArrayLike], x: ArrayLike, eps: float = 1e-6) -> NDArray:
     """Jacobian of ``fn`` at ``x`` by central differences.
 
     The step for component i is ``eps * max(1, |x_i|)``.
@@ -98,9 +96,7 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         x0 = np.array(x0, dtype=float).reshape(-1)
         n = x0.size
         if (h is None) != (R is None):
-            raise ValueError(
-                "h and R must be given together (or both omitted to use sensors)"
-            )
+            raise ValueError("h and R must be given together (or both omitted to use sensors)")
         if R is not None:
             R = np.atleast_2d(np.array(R, dtype=float))
             if R.ndim != 2 or R.shape[0] != R.shape[1]:
@@ -150,9 +146,7 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         self.P = F @ self.P @ F.T + self.Q
         self.F = F
 
-    def update(
-        self, z: ArrayLike | None, sensor: MeasurementModel | None = None
-    ) -> None:
+    def update(self, z: ArrayLike | None, sensor: MeasurementModel | None = None) -> None:
         """Correct the state with measurement z. ``None`` skips the update.
 
         With ``sensor``, its ``h``, ``H_jac``, ``R`` and ``residual`` replace the
@@ -219,9 +213,7 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         N = prepared[0][1].shape[0]
         for sensor, zs in prepared:
             if zs.shape[0] != N:
-                raise ValueError(
-                    f"all streams need {N} rows; {sensor!r} has {zs.shape[0]}"
-                )
+                raise ValueError(f"all streams need {N} rows; {sensor!r} has {zs.shape[0]}")
         us = _controls(us, N)
 
         n = self.n

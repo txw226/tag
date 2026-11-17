@@ -49,9 +49,7 @@ def main() -> None:
     motor = Motor()
     x_nominal = rail_exit_state()
     # The true rail-exit state and Cd are drawn from the filter's prior.
-    x0_true = x_nominal + np.array(
-        [POS_STD, POS_STD, VEL_STD, VEL_STD]
-    ) * rng.standard_normal(4)
+    x0_true = x_nominal + np.array([POS_STD, POS_STD, VEL_STD, VEL_STD]) * rng.standard_normal(4)
     cd_true = CD_NOMINAL + CD_STD * rng.standard_normal()
     run = simulate(x0_true, cd_true, DT, ACCEL_STD, rng, motor=motor)
 
@@ -79,15 +77,9 @@ def main() -> None:
     err_fixed = fixed[:, :2] - truth[:, :2]
     speed = np.linalg.norm(truth[:, 2:], axis=1)
 
-    print(
-        f"steps: {len(t)}  apogee: {truth[-1, 1]:.0f} m at t = {t[-1]:.1f} s  max speed: {speed.max():.0f} m/s"
-    )
-    print(
-        f"Cd  true: {cd_true:.4f}   estimate: {est[-1, 4]:.4f} ± {sig[-1, 4]:.4f}   (prior {CD_NOMINAL} ± {CD_STD})"
-    )
-    print(
-        f"position RMSE  estimating Cd: {rmse(err_est):.2f} m   fixed Cd = {CD_NOMINAL}: {rmse(err_fixed):.2f} m"
-    )
+    print(f"steps: {len(t)}  apogee: {truth[-1, 1]:.0f} m at t = {t[-1]:.1f} s  max speed: {speed.max():.0f} m/s")
+    print(f"Cd  true: {cd_true:.4f}   estimate: {est[-1, 4]:.4f} ± {sig[-1, 4]:.4f}   (prior {CD_NOMINAL} ± {CD_STD})")
+    print(f"position RMSE  estimating Cd: {rmse(err_est):.2f} m   fixed Cd = {CD_NOMINAL}: {rmse(err_fixed):.2f} m")
 
     fig = make_subplots(
         rows=2,

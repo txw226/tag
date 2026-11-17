@@ -120,10 +120,7 @@ def main() -> None:
     for n in ("cam L", "cam R", "GNSS"):
         print(f"  {n:6s} measurements: {int((~np.isnan(zs[n][:, 0])).sum())}")
     errs = {name: e[:, :2] - truth[:, :2] for name, e in est.items()}
-    print(
-        "position RMSE  "
-        + "   ".join(f"{name}: {rmse(e):.2f} m" for name, e in errs.items())
-    )
+    print("position RMSE  " + "   ".join(f"{name}: {rmse(e):.2f} m" for name, e in errs.items()))
 
     fig = make_subplots(
         rows=3,
@@ -267,9 +264,7 @@ def main() -> None:
         )
 
     fig.update_xaxes(title_text="x (m)", range=[-60, 200], row=1, col=1)
-    fig.update_yaxes(
-        title_text="y (m)", range=[-5, 60], scaleanchor="x", scaleratio=1, row=1, col=1
-    )
+    fig.update_yaxes(title_text="y (m)", range=[-5, 60], scaleanchor="x", scaleratio=1, row=1, col=1)
     fig.update_xaxes(title_text="t (s)", row=2, col=1)
     fig.update_yaxes(title_text="|error| (m)", row=2, col=1)
     fig.update_xaxes(title_text="t (s)", row=2, col=2)

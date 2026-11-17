@@ -84,9 +84,7 @@ class LinearKalmanFilter(KalmanFilterBase):
                 raise ValueError("control input u given but filter has no B matrix")
             u = np.asarray(u, dtype=float).reshape(-1)
             if u.shape != (self.B.shape[1],):
-                raise ValueError(
-                    f"u must have shape ({self.B.shape[1]},), got {u.shape}"
-                )
+                raise ValueError(f"u must have shape ({self.B.shape[1]},), got {u.shape}")
             self.x = self.x + self.B @ u
         self.P = self.F @ self.P @ self.F.T + self.Q
 
@@ -99,7 +97,5 @@ class LinearKalmanFilter(KalmanFilterBase):
             raise ValueError(f"z must have shape ({self.m},), got {z.shape}")
 
         y = z - self.H @ self.x
-        self.x, self.P, self.S, self.K = joseph_update(
-            self.x, self.P, y, self.H, self.R
-        )
+        self.x, self.P, self.S, self.K = joseph_update(self.x, self.P, y, self.H, self.R)
         self.y = y

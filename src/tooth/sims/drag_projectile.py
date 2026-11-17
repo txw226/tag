@@ -124,9 +124,7 @@ def make_model(
     radar = None
     if range_noise_std is not None or bearing_noise_std is not None:
         if range_noise_std is None or bearing_noise_std is None:
-            raise ValueError(
-                "give both range_noise_std and bearing_noise_std, or neither"
-            )
+            raise ValueError("give both range_noise_std and bearing_noise_std, or neither")
         radar = RangeBearingRadar(radar_pos, range_noise_std, bearing_noise_std)
     return DragProjectileModel(
         dt=dt,
@@ -190,15 +188,9 @@ def simulate(
     Returns the true states and noisy radar measurements (``run.model.radar``)
     at every step, starting at t = 0.
     """
-    m = make_model(
-        dt, accel_noise_std, range_noise_std, bearing_noise_std, drag, radar_pos, g
-    )
-    t, truth = simulate_trajectory(
-        x0, dt, accel_noise_std, rng, drag, t_max, substeps, g
-    )
-    return DragProjectileRun(
-        t=t, truth=truth, measurements=m.radar.measure_series(truth, rng), model=m
-    )
+    m = make_model(dt, accel_noise_std, range_noise_std, bearing_noise_std, drag, radar_pos, g)
+    t, truth = simulate_trajectory(x0, dt, accel_noise_std, rng, drag, t_max, substeps, g)
+    return DragProjectileRun(t=t, truth=truth, measurements=m.radar.measure_series(truth, rng), model=m)
 
 
 def make_filter(
@@ -216,9 +208,7 @@ def make_filter(
     m = run.model
     radar = m.radar
     z0 = run.measurements[0]
-    x0 = np.concatenate(
-        [radar.to_position(z0), np.asarray(velocity_guess, dtype=float)]
-    )
+    x0 = np.concatenate([radar.to_position(z0), np.asarray(velocity_guess, dtype=float)])
     P0 = np.zeros((4, 4))
     P0[:2, :2] = radar.position_cov(z0)
     P0[2:, 2:] = velocity_std**2 * np.eye(2)
@@ -235,13 +225,9 @@ def make_filter(
     )
 
 
-def make_fusion_filter(
-    model: DragProjectileModel, x0: ArrayLike, P0: ArrayLike
-) -> ExtendedKalmanFilter:
+def make_fusion_filter(model: DragProjectileModel, x0: ArrayLike, P0: ArrayLike) -> ExtendedKalmanFilter:
     """EKF with this model's dynamics and no default sensor.
 
     Run it with ``filter_sensors([(sensor, zs), ...])`` or ``update(z, sensor)``.
     """
-    return ExtendedKalmanFilter(
-        f=model.f, h=None, Q=model.Q, R=None, x0=x0, P0=P0, F_jac=model.F_jac
-    )
+    return ExtendedKalmanFilter(f=model.f, h=None, Q=model.Q, R=None, x0=x0, P0=P0, F_jac=model.F_jac)

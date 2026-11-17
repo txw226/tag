@@ -37,9 +37,7 @@ def test_zero_drag_matches_vacuum_closed_form():
     run = noise_free(drag=0.0)
     x0, t = launch_state(SPEED, ANGLE), run.t
     np.testing.assert_allclose(run.truth[:, 0], x0[2] * t, atol=1e-9)
-    np.testing.assert_allclose(
-        run.truth[:, 1], x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9
-    )
+    np.testing.assert_allclose(run.truth[:, 1], x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9)
     assert abs(t[-1] - 2 * x0[3] / G_EARTH) < DT
 
 
@@ -59,16 +57,12 @@ def test_noise_free_measurements_invert_to_truth():
     np.testing.assert_allclose(pos, run.truth[:, :2], atol=1e-9)
 
 
-@pytest.mark.parametrize(
-    "state", [[10.0, 20.0, 25.0, 15.0], [80.0, 5.0, -3.0, -30.0], [0.0, 0.0, 0.0, 0.0]]
-)
+@pytest.mark.parametrize("state", [[10.0, 20.0, 25.0, 15.0], [80.0, 5.0, -3.0, -30.0], [0.0, 0.0, 0.0, 0.0]])
 def test_analytic_jacobians_match_numerical(state):
     m = noise_free(0.008).model
     x = np.array(state)
     np.testing.assert_allclose(m.F_jac(x), numerical_jacobian(m.f, x), atol=1e-8)
-    np.testing.assert_allclose(
-        m.radar.H_jac(x), numerical_jacobian(m.radar.h, x), atol=1e-8
-    )
+    np.testing.assert_allclose(m.radar.H_jac(x), numerical_jacobian(m.radar.h, x), atol=1e-8)
 
 
 def test_ekf_beats_raw_measurements():

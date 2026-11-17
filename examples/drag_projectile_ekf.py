@@ -65,12 +65,8 @@ def main() -> None:
         f"steps: {len(t)}  flight time: {t[-1]:.2f} s  range: {truth[-1, 0]:.1f} m "
         f"(vacuum: {vacuum.truth[-1, 0]:.1f} m)"
     )
-    print(
-        f"position RMSE  radar (converted): {meas_rmse:.2f} m   EKF: {ekf_rmse:.2f} m"
-    )
-    print(
-        f"final velocity error: {np.linalg.norm(est[-1, 2:] - truth[-1, 2:]):.2f} m/s"
-    )
+    print(f"position RMSE  radar (converted): {meas_rmse:.2f} m   EKF: {ekf_rmse:.2f} m")
+    print(f"final velocity error: {np.linalg.norm(est[-1, 2:] - truth[-1, 2:]):.2f} m/s")
 
     fig = make_subplots(
         rows=2,

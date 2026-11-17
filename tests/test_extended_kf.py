@@ -35,9 +35,7 @@ def test_ekf_reduces_to_linear_kf(analytic):
     # Finite differences of a linear map are exact up to round-off.
     tol = 1e-10 if analytic else 1e-6
     for name in ("x_prior", "P_prior", "x_post", "P_post"):
-        np.testing.assert_allclose(
-            getattr(res, name), getattr(ref, name), rtol=tol, atol=tol
-        )
+        np.testing.assert_allclose(getattr(res, name), getattr(ref, name), rtol=tol, atol=tol)
 
 
 def test_numerical_jacobian_matches_analytic():
@@ -52,9 +50,7 @@ def test_numerical_jacobian_matches_analytic():
             [-x[1] / x[0] ** 2, 1 / x[0]],
         ]
     )
-    np.testing.assert_allclose(
-        numerical_jacobian(fn, x), expected, rtol=1e-8, atol=1e-9
-    )
+    np.testing.assert_allclose(numerical_jacobian(fn, x), expected, rtol=1e-8, atol=1e-9)
 
 
 def wrap(a):
@@ -182,15 +178,11 @@ def test_filter_sensors_single_stream_matches_filter():
     ref = default.filter(zs)
     res = fused.filter_sensors([(run.model.radar, zs)])
     for name in ("x_prior", "P_prior", "x_post", "P_post"):
-        np.testing.assert_allclose(
-            getattr(res, name), getattr(ref, name), rtol=1e-12, atol=1e-12
-        )
+        np.testing.assert_allclose(getattr(res, name), getattr(ref, name), rtol=1e-12, atol=1e-12)
 
 
 def test_update_without_measurement_model_raises():
-    ekf = ExtendedKalmanFilter(
-        f=lambda x, u: x, h=None, Q=np.eye(2), R=None, x0=np.zeros(2), P0=np.eye(2)
-    )
+    ekf = ExtendedKalmanFilter(f=lambda x, u: x, h=None, Q=np.eye(2), R=None, x0=np.zeros(2), P0=np.eye(2))
     with pytest.raises(ValueError, match="pass a sensor"):
         ekf.update([1.0])
     with pytest.raises(ValueError, match="h and R must be given together"):
@@ -207,9 +199,7 @@ def test_update_without_measurement_model_raises():
 def test_filter_sensors_validates_streams():
     from tooth.sensors import GnssPosition
 
-    ekf = ExtendedKalmanFilter(
-        f=lambda x, u: x, h=None, Q=np.eye(4), R=None, x0=np.zeros(4), P0=np.eye(4)
-    )
+    ekf = ExtendedKalmanFilter(f=lambda x, u: x, h=None, Q=np.eye(4), R=None, x0=np.zeros(4), P0=np.eye(4))
     gnss = GnssPosition(1.0, every=1)
     with pytest.raises(ValueError, match="at least one"):
         ekf.filter_sensors([])

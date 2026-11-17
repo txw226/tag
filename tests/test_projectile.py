@@ -15,14 +15,10 @@ def rmse(err):
 
 def test_noise_free_trajectory_matches_closed_form():
     x0 = launch_state(30.0, 45.0)
-    run = simulate(
-        x0, DT, accel_noise_std=0.0, meas_noise_std=0.0, rng=np.random.default_rng(0)
-    )
+    run = simulate(x0, DT, accel_noise_std=0.0, meas_noise_std=0.0, rng=np.random.default_rng(0))
     t = run.t
     np.testing.assert_allclose(run.truth[:, 0], x0[2] * t)
-    np.testing.assert_allclose(
-        run.truth[:, 1], x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9
-    )
+    np.testing.assert_allclose(run.truth[:, 1], x0[3] * t - 0.5 * G_EARTH * t**2, atol=1e-9)
     assert np.all(run.truth[:, 1] >= 0)
     # Lands at the analytic flight time 2 vy / g.
     assert abs(t[-1] - 2 * x0[3] / G_EARTH) < DT
