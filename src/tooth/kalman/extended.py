@@ -7,20 +7,36 @@ Model:
 The filter linearizes f around the previous posterior and h around the
 prior. Jacobians come from user-supplied callables when given, otherwise
 from central finite differences.
+
+Several sensors can be fused: pass a measurement model (anything with ``h``,
+``H_jac``, ``R`` and ``residual``, such as a :class:`tooth.sensors.Sensor`) to
+``update(z, sensor)``, or run :meth:`ExtendedKalmanFilter.filter_sensors`
+over one measurement stream per sensor.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import Protocol
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from tooth.kalman._base import KalmanFilterBase, _as_matrix, joseph_update
+from tooth.kalman._base import FilterResult, KalmanFilterBase, _as_matrix, _controls, joseph_update
 
 TransitionFn = Callable[[NDArray, NDArray | None], ArrayLike]
 MeasurementFn = Callable[[NDArray], ArrayLike]
 ResidualFn = Callable[[NDArray, NDArray], ArrayLike]
+
+
+class MeasurementModel(Protocol):
+    """What ``update(z, sensor)`` needs from a sensor."""
+
+    R: NDArray
+
+    def h(self, x: NDArray) -> ArrayLike: ...
+    def H_jac(self, x: NDArray) -> ArrayLike: ...
+    def residual(self, z: NDArray, z_pred: NDArray) -> ArrayLike: ...
 
 
 def numerical_jacobian(fn: Callable[[NDArray], ArrayLike], x: ArrayLike, eps: float = 1e-6) -> NDArray:
@@ -45,9 +61,10 @@ class ExtendedKalmanFilter(KalmanFilterBase):
 
     Args:
         f: transition ``f(x, u) -> x_next``; ``u`` is None when no control is given.
-        h: measurement ``h(x) -> z_pred``.
+        h: default measurement ``h(x) -> z_pred``. Optional: without it, every
+            update needs a ``sensor``.
         Q: (n, n) process noise covariance.
-        R: (m, m) measurement noise covariance.
+        R: (m, m) measurement noise covariance for ``h``; required with ``h``.
         x0: (n,) initial state estimate.
         P0: (n, n) initial state covariance.
         F_jac: optional ``F_jac(x, u) -> (n, n)`` Jacobian of f; numerical if omitted.
@@ -60,9 +77,9 @@ class ExtendedKalmanFilter(KalmanFilterBase):
     def __init__(
         self,
         f: TransitionFn,
-        h: MeasurementFn,
+        h: MeasurementFn | None,
         Q: ArrayLike,
-        R: ArrayLike,
+        R: ArrayLike | None,
         x0: ArrayLike,
         P0: ArrayLike,
         F_jac: Callable[[NDArray, NDArray | None], ArrayLike] | None = None,
@@ -72,10 +89,12 @@ class ExtendedKalmanFilter(KalmanFilterBase):
     ) -> None:
         x0 = np.array(x0, dtype=float).reshape(-1)
         n = x0.size
-        R = np.atleast_2d(np.array(R, dtype=float))
-        if R.ndim != 2 or R.shape[0] != R.shape[1]:
-            raise ValueError(f"R must be square (m, m), got {R.shape}")
-        m = R.shape[0]
+        if (h is None) != (R is None):
+            raise ValueError("h and R must be given together (or both omitted to use sensors)")
+        if R is not None:
+            R = np.atleast_2d(np.array(R, dtype=float))
+            if R.ndim != 2 or R.shape[0] != R.shape[1]:
+                raise ValueError(f"R must be square (m, m), got {R.shape}")
 
         self.f, self.h = f, h
         self.F_jac, self.H_jac = F_jac, H_jac
@@ -85,7 +104,8 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         self.R = R
         self.P = _as_matrix("P0", P0, (n, n))
         self.x = x0
-        self.n, self.m = n, m
+        self.n = n
+        self.m = None if R is None else R.shape[0]
 
         # Diagnostics from the most recent predict / update.
         self.F: NDArray | None = None  # transition Jacobian
@@ -120,26 +140,84 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         self.P = F @ self.P @ F.T + self.Q
         self.F = F
 
-    def update(self, z: ArrayLike | None) -> None:
-        """Correct the state with measurement z. ``None`` skips the update."""
+    def update(self, z: ArrayLike | None, sensor: MeasurementModel | None = None) -> None:
+        """Correct the state with measurement z. ``None`` skips the update.
+
+        With ``sensor``, its ``h``, ``H_jac``, ``R`` and ``residual`` replace the
+        filter's defaults for this update.
+        """
         if z is None:
             return
-        n, m = self.n, self.m
+        if sensor is not None:
+            h, H_jac, residual = sensor.h, getattr(sensor, "H_jac", None), getattr(sensor, "residual", None)
+            R = np.atleast_2d(np.asarray(sensor.R, dtype=float))
+        elif self.h is not None:
+            h, H_jac, residual, R = self.h, self.H_jac, self.residual, self.R
+        else:
+            raise ValueError("filter has no default h; pass a sensor to update()")
+
+        n, m = self.n, R.shape[0]
         z = np.asarray(z, dtype=float).reshape(-1)
         if z.shape != (m,):
             raise ValueError(f"z must have shape ({m},), got {z.shape}")
 
         x = self.x
-        z_pred = self._checked("h", self.h(x), (m,))
-        if self.H_jac is not None:
-            H = self._checked("H_jac", self.H_jac(x), (m, n))
+        z_pred = self._checked("h", h(x), (m,))
+        if H_jac is not None:
+            H = self._checked("H_jac", H_jac(x), (m, n))
         else:
-            H = numerical_jacobian(self.h, x, self.eps)
+            H = numerical_jacobian(h, x, self.eps)
 
-        if self.residual is None:
+        if residual is None:
             y = z - z_pred
         else:
-            y = self._checked("residual", self.residual(z, z_pred), (m,))
+            y = self._checked("residual", residual(z, z_pred), (m,))
 
-        self.x, self.P, self.S, self.K = joseph_update(x, self.P, y, H, self.R)
+        self.x, self.P, self.S, self.K = joseph_update(x, self.P, y, H, R)
         self.y, self.H = y, H
+
+    def filter_sensors(
+        self,
+        streams: Sequence[tuple[MeasurementModel, ArrayLike]],
+        us: ArrayLike | None = None,
+    ) -> FilterResult:
+        """Fuse several measurement streams.
+
+        Each step predicts once, then updates with every stream whose row is
+        not NaN, in the order given. Sequential updates are exact when the
+        sensors' noises are independent.
+
+        Args:
+            streams: ``(sensor, zs)`` pairs, with ``zs`` of shape (N, m_sensor)
+                and the same N for every stream; NaN rows mean no measurement.
+            us: optional (N, p) control inputs, or a single (p,) input used every step.
+        """
+        if not streams:
+            raise ValueError("filter_sensors needs at least one (sensor, zs) stream")
+        prepared = []
+        for sensor, zs in streams:
+            zs = np.asarray(zs, dtype=float)
+            if zs.ndim == 1:
+                zs = zs.reshape(-1, 1)
+            prepared.append((sensor, zs))
+        N = prepared[0][1].shape[0]
+        for sensor, zs in prepared:
+            if zs.shape[0] != N:
+                raise ValueError(f"all streams need {N} rows; {sensor!r} has {zs.shape[0]}")
+        us = _controls(us, N)
+
+        n = self.n
+        out = FilterResult(
+            x_prior=np.empty((N, n)),
+            P_prior=np.empty((N, n, n)),
+            x_post=np.empty((N, n)),
+            P_post=np.empty((N, n, n)),
+        )
+        for k in range(N):
+            self.predict(None if us is None else us[k])
+            out.x_prior[k], out.P_prior[k] = self.x, self.P
+            for sensor, zs in prepared:
+                if not np.isnan(zs[k]).any():
+                    self.update(zs[k], sensor)
+            out.x_post[k], out.P_post[k] = self.x, self.P
+        return out

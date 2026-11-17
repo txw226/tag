@@ -25,6 +25,16 @@ def _as_matrix(name: str, value: ArrayLike, shape: tuple[int, int]) -> NDArray:
     return arr
 
 
+def _controls(us: ArrayLike | None, N: int) -> NDArray | None:
+    """(N, p) control inputs from an (N, p) array or a single (p,) input."""
+    if us is None:
+        return None
+    us = np.asarray(us, dtype=float)
+    if us.ndim <= 1:
+        us = np.broadcast_to(us.reshape(1, -1), (N, us.size))
+    return us
+
+
 def joseph_update(
     x: NDArray, P: NDArray, y: NDArray, H: NDArray, R: NDArray
 ) -> tuple[NDArray, NDArray, NDArray, NDArray]:
@@ -74,10 +84,7 @@ class KalmanFilterBase:
             zs = zs.reshape(-1, 1)
         N = zs.shape[0]
 
-        if us is not None:
-            us = np.asarray(us, dtype=float)
-            if us.ndim <= 1:
-                us = np.broadcast_to(us.reshape(1, -1), (N, us.size))
+        us = _controls(us, N)
 
         n = self.n
         out = FilterResult(

@@ -6,7 +6,6 @@ from tooth.sims.drag_projectile import (
     G_EARTH,
     launch_state,
     make_filter,
-    measurement_to_position,
     simulate,
 )
 
@@ -46,7 +45,7 @@ def test_drag_shortens_flight_and_dissipates_energy():
 
 def test_noise_free_measurements_invert_to_truth():
     run = noise_free(0.008)
-    pos = measurement_to_position(run.measurements, run.model.radar_pos)
+    pos = run.model.radar.to_position(run.measurements)
     np.testing.assert_allclose(pos, run.truth[:, :2], atol=1e-9)
 
 
@@ -55,7 +54,7 @@ def test_analytic_jacobians_match_numerical(state):
     m = noise_free(0.008).model
     x = np.array(state)
     np.testing.assert_allclose(m.F_jac(x), numerical_jacobian(m.f, x), atol=1e-8)
-    np.testing.assert_allclose(m.H_jac(x), numerical_jacobian(m.h, x), atol=1e-8)
+    np.testing.assert_allclose(m.radar.H_jac(x), numerical_jacobian(m.radar.h, x), atol=1e-8)
 
 
 def test_ekf_beats_raw_measurements():
@@ -67,7 +66,7 @@ def test_ekf_beats_raw_measurements():
     res = ekf.filter(run.measurements[1:])
 
     truth = run.truth[1:]
-    meas_pos = measurement_to_position(run.measurements[1:], run.model.radar_pos)
+    meas_pos = run.model.radar.to_position(run.measurements[1:])
     assert rmse(res.x_post[:, :2] - truth[:, :2]) < 0.5 * rmse(meas_pos - truth[:, :2])
 
     settled = run.t[1:] > 1.0

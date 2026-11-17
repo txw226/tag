@@ -135,3 +135,58 @@ def test_filter_copies_its_inputs():
     ekf.x += 1.0
     for k, v in arrays.items():
         np.testing.assert_array_equal(v, originals[k], err_msg=k)
+
+
+def drag_radar_run():
+    from tooth.sims.drag_projectile import launch_state as drag_launch, make_filter as drag_filter
+    from tooth.sims.drag_projectile import simulate as drag_simulate
+
+    x0 = drag_launch(50.0, 45.0)
+    run = drag_simulate(x0, 0.05, 0.5, 2.0, 0.01, np.random.default_rng(5))
+    return run, drag_filter(run, x0[2:], 5.0)
+
+
+def test_update_with_sensor_matches_default_measurement_model():
+    from tooth.sims.drag_projectile import make_fusion_filter
+
+    run, default = drag_radar_run()
+    radar = run.model.radar
+    fused = make_fusion_filter(run.model, default.x, default.P)
+    for z in run.measurements[1:30]:
+        default.step(z)
+        fused.predict()
+        fused.update(z, radar)
+        np.testing.assert_allclose(fused.x, default.x, rtol=1e-12, atol=1e-12)
+        np.testing.assert_allclose(fused.P, default.P, rtol=1e-12, atol=1e-12)
+
+
+def test_filter_sensors_single_stream_matches_filter():
+    from tooth.sims.drag_projectile import make_fusion_filter
+
+    run, default = drag_radar_run()
+    zs = run.measurements[1:].copy()
+    zs[20:30] = np.nan
+    fused = make_fusion_filter(run.model, default.x, default.P)
+    ref = default.filter(zs)
+    res = fused.filter_sensors([(run.model.radar, zs)])
+    for name in ("x_prior", "P_prior", "x_post", "P_post"):
+        np.testing.assert_allclose(getattr(res, name), getattr(ref, name), rtol=1e-12, atol=1e-12)
+
+
+def test_update_without_measurement_model_raises():
+    ekf = ExtendedKalmanFilter(f=lambda x, u: x, h=None, Q=np.eye(2), R=None, x0=np.zeros(2), P0=np.eye(2))
+    with pytest.raises(ValueError, match="pass a sensor"):
+        ekf.update([1.0])
+    with pytest.raises(ValueError, match="h and R must be given together"):
+        ExtendedKalmanFilter(f=lambda x, u: x, h=lambda x: x, Q=np.eye(2), R=None, x0=np.zeros(2), P0=np.eye(2))
+
+
+def test_filter_sensors_validates_streams():
+    from tooth.sensors import GnssPosition
+
+    ekf = ExtendedKalmanFilter(f=lambda x, u: x, h=None, Q=np.eye(4), R=None, x0=np.zeros(4), P0=np.eye(4))
+    gnss = GnssPosition(1.0, every=1)
+    with pytest.raises(ValueError, match="at least one"):
+        ekf.filter_sensors([])
+    with pytest.raises(ValueError, match="rows"):
+        ekf.filter_sensors([(gnss, np.zeros((5, 2))), (gnss, np.zeros((4, 2)))])

@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from _plotting import band, rmse
-from tooth.sims.drag_projectile import launch_state, make_filter, measurement_to_position, simulate
+from tooth.sims.drag_projectile import launch_state, make_filter, simulate
 
 DT = 0.05  # s, radar rate 20 Hz
 ACCEL_STD = 0.5  # m/s^2, gusts
@@ -56,8 +56,8 @@ def main() -> None:
     cov = np.concatenate([P_init[None], res.P_post])
     sig = np.sqrt(np.diagonal(cov, axis1=1, axis2=2))
     truth = run.truth
-    radar = run.model.radar_pos
-    meas = measurement_to_position(run.measurements, radar)
+    radar = run.model.radar
+    meas = radar.to_position(run.measurements)
 
     meas_rmse = rmse(meas - truth[:, :2])
     ekf_rmse = rmse(est[:, :2] - truth[:, :2])
@@ -96,7 +96,7 @@ def main() -> None:
         row=1, col=1,
     )
     fig.add_trace(
-        go.Scatter(x=[radar[0]], y=[radar[1]], mode="markers", name="radar",
+        go.Scatter(x=[radar.position[0]], y=[radar.position[1]], mode="markers", name="radar",
                    marker={"color": COLORS["radar"], "size": 12, "symbol": "triangle-up"}),
         row=1, col=1,
     )
