@@ -13,6 +13,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from _plotting import band, rmse
 from tooth.sims.projectile import launch_state, make_filter, simulate
 
 DT = 0.05  # s, sensor rate 20 Hz
@@ -21,29 +22,6 @@ MEAS_STD = 2.0  # m, position sensor noise
 VEL_STD = 5.0  # m/s, initial velocity uncertainty
 
 COLORS = {"truth": "#1f2937", "meas": "#9ca3af", "kf": "#2563eb", "x": "#2563eb", "y": "#dc2626"}
-
-
-def rmse(err: np.ndarray) -> float:
-    return float(np.sqrt(np.mean(np.sum(err**2, axis=1))))
-
-
-def band(fig, t, center, sigma, color, name, row, col):
-    """Shaded ±2σ region around `center`."""
-    fig.add_trace(
-        go.Scatter(
-            x=np.concatenate([t, t[::-1]]),
-            y=np.concatenate([center + 2 * sigma, (center - 2 * sigma)[::-1]]),
-            fill="toself",
-            fillcolor=color,
-            opacity=0.15,
-            line={"width": 0},
-            hoverinfo="skip",
-            name=name,
-            showlegend=False,
-        ),
-        row=row,
-        col=col,
-    )
 
 
 def main() -> None:

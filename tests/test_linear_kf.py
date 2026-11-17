@@ -67,3 +67,16 @@ def test_covariance_stays_symmetric_positive_definite():
     for P in res.P_post:
         np.testing.assert_allclose(P, P.T, atol=0)
         assert np.all(np.linalg.eigvalsh(P) > 0)
+
+
+def test_filter_copies_its_inputs():
+    """In-place edits to a filter's matrices must not leak into the caller's arrays, or vice versa."""
+    args = dict(F=np.eye(2), H=np.ones((1, 2)), Q=np.eye(2), R=np.eye(1), x0=np.zeros(2), P0=np.eye(2), B=np.ones((2, 1)))
+    originals = {k: v.copy() for k, v in args.items()}
+    kf = LinearKalmanFilter(**args)
+    for name in ("F", "H", "Q", "R", "B"):
+        getattr(kf, name)[...] *= 3.0
+    kf.P[...] *= 3.0
+    kf.x[...] += 1.0
+    for k, v in args.items():
+        np.testing.assert_array_equal(v, originals[k], err_msg=k)
