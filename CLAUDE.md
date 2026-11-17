@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`tooth` is a Python Kalman filtering library (linear KF + EKF) (Python >= 3.14, pinned to 3.14 in `.python-version`) managed with **uv**, using the `uv_build` backend and a `src/` layout. Dependencies: numpy, plotly (plots); pytest, ruff, mypy, pre-commit (dev). All code is kept ruff-clean (check + format) and mypy-clean; the pre-commit hook enforces both, and if a hook modifies files the commit fails so the fixes can be reviewed and re-staged. It also holds a standalone scratch C++ file.
+`tooth` is a Python Kalman filtering library (linear KF + EKF) (Python >= 3.14, pinned to 3.14 in `.python-version`) managed with **uv**, using the `uv_build` backend and a `src/` layout. Dependencies: numpy, plotly (plots); pytest, ruff, mypy, pre-commit (dev). All code is kept ruff-clean (check + format) and mypy-clean; the pre-commit hook enforces both, and also blocks staged private keys (`detect-private-key`). Commit messages must reference an issue as `#N` (convention: `#N summary`); a commit-msg hook rejects ones that don't, except git-generated Merge/Revert/fixup! messages, and if a hook modifies files the commit fails so the fixes can be reviewed and re-staged. It also holds a standalone scratch C++ file.
 
 ## Commands
 
@@ -20,7 +20,7 @@ uv run python examples/drag_lkf_vs_ekf.py      # drag-free LKF (true / inflated 
 uv add <pkg>   /   uv add --dev <pkg>      # add a dependency (keeps uv.lock in sync; don't hand-edit)
 uv run ruff check --fix && uv run ruff format   # lint + format (config in pyproject.toml, line length 120)
 uv run mypy                                # type-check src, tests, examples (config in pyproject.toml)
-uv run pre-commit install                  # once per clone: ruff check --fix + format on staged files, then mypy, at commit
+uv run pre-commit install                  # once per clone: installs the pre-commit + commit-msg hooks (see .pre-commit-config.yaml)
 uv run pre-commit run --all-files          # run the hooks over the whole repo
 
 g++ src/tooth/try.cpp -o build/try && ./build/try   # scratch C++ (not part of the Python build)
