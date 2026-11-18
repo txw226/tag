@@ -1,6 +1,8 @@
 # tooth
 pulling teeth and taking names
 
+New to Kalman filters? Start with the [tutorial](docs/kalman_tutorial.md).
+
 ## Developer Installation
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and git. uv installs Python 3.14 itself (pinned in `.python-version`).

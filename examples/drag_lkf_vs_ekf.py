@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
-from _plotting import band, chi2_bounds, rmse
+from _plotting import band, chi2_bounds, nees, nis, rmse
 from plotly.subplots import make_subplots
 
 from tooth.kalman import FilterResult, LinearKalmanFilter
@@ -77,25 +77,6 @@ def run_filters(gnss: GnssPosition, zs: np.ndarray, x0: np.ndarray, P0: np.ndarr
     return out
 
 
-def nees(truth: np.ndarray, x: np.ndarray, P: np.ndarray) -> np.ndarray:
-    e = x - truth
-    return np.einsum("ki,ki->k", e, np.linalg.solve(P, e[..., None])[..., 0])
-
-
-def nis(gnss: GnssPosition, zs: np.ndarray, res: FilterResult) -> np.ndarray:
-    """NIS at each step's update, from the prior; NaN where there was no measurement."""
-    out = np.full(len(zs), np.nan)
-    for k, z in enumerate(zs):
-        if np.isnan(z).any():
-            continue
-        x, P = res.x_prior[k], res.P_prior[k]
-        H = gnss.H_jac(x)
-        y = gnss.residual(z, gnss.h(x))
-        S = H @ P @ H.T + gnss.R
-        out[k] = y @ np.linalg.solve(S, y)
-    return out
-
-
 def simulate_once(rng: np.random.Generator, gnss: GnssPosition) -> dict:
     """One flight: truth drawn from the prior, GNSS readings, every filter's results and metrics."""
     x0, P0 = prior()
@@ -108,7 +89,7 @@ def simulate_once(rng: np.random.Generator, gnss: GnssPosition) -> dict:
         est[name] = np.vstack([x0, res.x_post])
         cov[name] = np.concatenate([P0[None], res.P_post])
         m_nees[name] = nees(truth[1:], res.x_post, res.P_post)
-        m_nis[name] = nis(gnss, zs[1:], res)
+        m_nis[name] = nis(zs[1:], res.x_prior, res.P_prior, gnss.H_jac(x0), gnss.R)
     return {
         "t": t,
         "truth": truth,
