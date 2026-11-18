@@ -15,6 +15,8 @@ def rmse(err: np.ndarray) -> float:
 def nees(truth: np.ndarray, x: np.ndarray, P: np.ndarray) -> np.ndarray:
     """Normalized estimation error squared eᵀ P⁻¹ e per row, e = x − truth (needs the truth)."""
     e = x - truth
+    # For each step k: solve P_k w_k = e_k (i.e. w_k = P_k⁻¹ e_k, without forming the inverse),
+    # then "ki,ki->k" is a row-wise dot product e_k · w_k = e_kᵀ P_k⁻¹ e_k.
     return np.einsum("ki,ki->k", e, np.linalg.solve(P, e[..., None])[..., 0])
 
 
@@ -22,6 +24,7 @@ def nis(zs: np.ndarray, x_prior: np.ndarray, P_prior: np.ndarray, H: np.ndarray,
     """Normalized innovation squared yᵀ S⁻¹ y per row for a linear H; NaN where z is missing."""
     y = zs - x_prior @ H.T
     S = H @ P_prior @ H.T + R
+    # Same pattern as nees: per step k, w_k = S_k⁻¹ y_k by a solve, then the row-wise dot y_k · w_k = y_kᵀ S_k⁻¹ y_k.
     out = np.einsum("ki,ki->k", y, np.linalg.solve(S, y[..., None])[..., 0])
     out[np.isnan(zs).any(axis=1)] = np.nan
     return out

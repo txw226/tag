@@ -102,6 +102,7 @@ def pooled_nees(q_scale: float = 1.0, runs: int = 50, seed: int = 7) -> float:
         _t, truth, streams = scenario(rng, accel_std)
         res = run_filter(streams, CONFIGS["fused"], accel_std, q_scale)
         err = res.x_post - truth[1:]
+        # NEES per step k: e_kᵀ P_k⁻¹ e_k ("ki,kij,kj->k" = row vector · matrix · column vector, for every k).
         nees.append(np.einsum("ki,kij,kj->k", err, np.linalg.inv(res.P_post), err))
     return float(np.concatenate(nees).mean())
 
