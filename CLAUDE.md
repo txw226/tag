@@ -48,3 +48,17 @@ The user's shell setup (`~/tooth.zshrc`) activates `.venv` automatically and def
 - `tests/test_fusion.py` holds a NEES test for GNSS + two cameras, with bounds also taken from a 20-seed sweep. Keep the cameras well away from the flight path: a target within a few metres of a camera makes the projection too nonlinear, and NEES spikes above 100. Stereo-only errors are heavy-tailed, so compare RMSE over at least 20 seeds.
 - `tests/test_rocket.py` holds a NEES test over the 5-element augmented state (≈ 5), with bounds from a 20-seed sweep. It's the slowest test file (about 13 s), because each NEES call simulates 50 flights of about 270 steps.
 - `src/tooth/try.cpp` is a scratch file.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for txw226/tooth, using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels are used as-is (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root, created only when a term or decision first needs recording. See `docs/agents/domain.md`.
