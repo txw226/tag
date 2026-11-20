@@ -1,5 +1,5 @@
 # tag
-Satellite orbit propagation and Kalman filtering. The filtering half is `tag.filtering`; the propagation half, `tag.propagation`, is a compiled C++ extension (so far a Kepler-equation solver).
+Satellite orbit propagation and Kalman filtering. The filtering half is `tag.filtering`; the propagation half, `tag.propagation`, is a compiled C++ extension (so far a Kepler-equation solver and two-body propagation).
 
 New to Kalman filters? Start with the [tutorial](docs/kalman_tutorial.md).
 
