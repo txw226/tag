@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`tag` is a Python Kalman filtering library (linear KF + EKF), with a C++ orbit propagator planned (see `docs/adr/0001`). It needs Python >= 3.14 (pinned to 3.14 in `.python-version`) and is managed with **uv**, using the `uv_build` backend and a `src/` layout. Dependencies: numpy, plotly (plots); pytest, ruff, mypy, pre-commit (dev). All code is kept ruff-clean (check + format) and mypy-clean; the pre-commit hook enforces both, and also blocks staged private keys (`detect-private-key`). Commit messages must reference an issue as `#N` (convention: `#N summary`); a commit-msg hook rejects ones that don't, except git-generated Merge/Revert/fixup! messages, and if a hook modifies files the commit fails so the fixes can be reviewed and re-staged.
+`tag` is a Kalman filtering library (linear KF + EKF) plus a C++20 orbit propagator bound with nanobind (`tag.propagation`; so far only the Kepler solver, see `docs/adr/0001`). It needs Python >= 3.14 (pinned to 3.14 in `.python-version`) and a C++20 compiler (g++ or clang++), and is managed with **uv**, using the scikit-build-core (CMake) backend and a `src/` layout. Dependencies: numpy, plotly (plots); pytest, ruff, mypy, pre-commit, nanobind (stub generation), clang-format, cmake, ninja (dev). All code is kept ruff-clean (check + format), mypy-clean and clang-format-clean; the pre-commit hook enforces all three, and also blocks staged private keys (`detect-private-key`). Commit messages must reference an issue as `#N` (convention: `#N summary`); a commit-msg hook rejects ones that don't, except git-generated Merge/Revert/fixup! messages, and if a hook modifies files the commit fails so the fixes can be reviewed and re-staged.
 
 ## Commands
 
 ```sh
-uv sync                                    # create/update .venv from pyproject.toml + uv.lock
+uv sync                                    # create/update .venv from pyproject.toml + uv.lock; compiles the C++ extension
 uv run pytest -q                           # run all tests
 uv run pytest tests/filtering/test_linear_kf.py::test_scalar_constant_matches_running_mean   # single test
 uv run python examples/filtering/projectile_kf.py    # sim + filter + plotly HTML (examples/filtering/out/, gitignored); --no-show, --seed N
@@ -22,6 +22,8 @@ uv run python examples/filtering/tuning_sweep.py         # tutorial: sweep Q / R
 uv run python examples/filtering/pitfalls.py             # tutorial: bad P0, dropout, outliers, sensor bias vs the metrics
 uv add <pkg>   /   uv add --dev <pkg>      # add a dependency (keeps uv.lock in sync; don't hand-edit)
 uv run ruff check --fix && uv run ruff format   # lint + format (config in pyproject.toml, line length 120)
+git ls-files -z '*.cpp' '*.hpp' | xargs -0 uv run clang-format -i   # format C++ (.clang-format: LLVM style, column limit 120)
+cpp/bench/run.sh                           # build (Release, native, into build/bench) and run the nanobench C++ microbenchmarks
 uv run mypy                                # type-check src, tests, examples (config in pyproject.toml)
 uv run pre-commit install                  # once per clone: installs the pre-commit + commit-msg hooks (see .pre-commit-config.yaml)
 uv run pre-commit run --all-files          # run the hooks over the whole repo
@@ -31,8 +33,18 @@ The user's shell setup (`~/tag.zshrc`) activates `.venv` automatically and defin
 
 ## Architecture
 
-One package `tag` (ADR 0001): `tag.filtering` holds everything below, and a future `tag.propagation` the orbit propagator; filtering may import propagation, never the reverse. No namespace package. Tests and examples follow the same split: `tests/filtering/`, `examples/filtering/`, and the root `tests/`/`examples/` for code using both halves (pytest runs in `importlib` mode, so same-named test files in different folders don't clash). `tag:main` is the `tag` console script.
+### Build
 
+- `uv sync`/`uv run` rebuild the extension only when a `[tool.uv] cache-keys` file changes (`pyproject.toml`, `CMakeLists.txt`, anything under `cpp/`), or `SKBUILD_CMAKE_DEFINE` changes. A C++ edit therefore needs no manual reinstall; just `uv run`. Python files are served live from `src/` (scikit-build-core editable redirect). The build is incremental in `build/{wheel_tag}/` (gitignored), and a stale or broken build is fixed by deleting `build/`. A new C++ file must be added to `CMakeLists.txt`, and a file outside `cpp/` must also be added to the cache keys.
+- Flags: Release (`-O3`), `-fno-math-errno`, and `-march=native` unless `TAG_NATIVE=OFF` (CI sets `SKBUILD_CMAKE_DEFINE=TAG_NATIVE=OFF` for portable binaries, and compiles via ccache). Never use `-ffast-math`: it breaks NaN checks and Kepler convergence.
+- `cpp/include/tag/...` + `cpp/src/...` form the core static library `tag_core`, which uses plain C++ types only. `cpp/bindings/propagation.cpp` is the only file that includes nanobind. It builds the private module `tag.propagation._propagation` and validates inputs there (the core states its preconditions and doesn't check them). `cpp/bench/` holds the nanobench harness (CMake option `TAG_BUILD_BENCHMARKS`, nanobench fetched by FetchContent); add a benchmark as a function called from `main.cpp`.
+- `src/tag/propagation/_propagation.pyi` is the extension's type stub, which mypy relies on. It is nanobind stubgen output after `ruff format`, and `tests/propagation/test_stub.py` fails when it's stale (the failure prints the regenerate command). Regenerate it after changing any binding.
+
+### Packages
+
+One package `tag` (ADR 0001): `tag.filtering` holds the filters, sensors and sims, and `tag.propagation` the orbit propagator; filtering may import propagation, never the reverse. No namespace package. Tests and examples follow the same split: `tests/filtering/`, `tests/propagation/`, `examples/filtering/`, and the root `tests/`/`examples/` for code using both halves (pytest runs in `importlib` mode, so same-named test files in different folders don't clash). `tag:main` is the `tag` console script.
+
+- `tag.propagation`: re-exports the compiled extension. `eccentric_anomaly(M, e)` solves Kepler's equation (`cpp/src/propagation/kepler.cpp`): reduce M to [−π, π] (Cody–Waite split of 2π), apply Markley's starter, then take 2 fixed Halley steps, using one `sincos` with angle-addition updates. E is returned in M's revolution. `tests/propagation/test_kepler.py` checks it against Vallado Example 2-1 and checks the residual below 1e-15 over sweeps of M and e (e up to 1 − 1e-12). One Halley step fails that sweep.
 - `src/tag/filtering/kalman/`: filters. `_base.py` holds `FilterResult`, `joseph_update` (the gain is computed with a `solve`, then the Joseph-form covariance update) and `KalmanFilterBase`, which provides `step`/`filter` on top of a subclass's `predict(u)`/`update(z)`. `update(None)`, or a NaN row in `filter`, skips a measurement. `filter` returns prior and posterior states/covariances for every step.
   - `LinearKalmanFilter` (`linear.py`): fixed `F, H, Q, R, (B)` matrices.
   - `ExtendedKalmanFilter` (`extended.py`): callables `f(x, u)`, `h(x)`, with optional analytic `F_jac(x, u)`/`H_jac(x)` (central-difference `numerical_jacobian` otherwise) and an optional `residual(z, z_pred)` for angle wrapping. With linear f/h it reproduces `LinearKalmanFilter` exactly (tested). For fusion, `h`/`R` may be omitted. `update(z, sensor)` then uses any object with `h`, `H_jac`, `R` and `residual`, and `filter_sensors([(sensor, zs), ...])` does one predict per step followed by a sequential update for each stream whose row isn't NaN.

@@ -1,0 +1,3 @@
+# Enforced by the pre-commit hook and CI (clang-format comes from the uv dev group).
+BasedOnStyle: LLVM
+ColumnLimit: 120

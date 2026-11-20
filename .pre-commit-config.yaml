@@ -1,6 +1,6 @@
 # Run `uv run pre-commit install` once per clone to enable (installs both the
 # pre-commit and commit-msg hooks listed below).
-# Ruff and mypy hooks call the versions pinned in uv.lock, so they match manual runs.
+# Ruff, mypy and clang-format hooks call the versions pinned in uv.lock, so they match manual runs.
 default_install_hook_types: [pre-commit, commit-msg]
 default_stages: [pre-commit]
 
@@ -34,6 +34,12 @@ repos:
         types_or: [python, pyi]
         pass_filenames: false
         require_serial: true
+      - id: clang-format
+        name: clang-format
+        # Style from .clang-format; formats in place, so a change stops the commit for review.
+        entry: uv run clang-format -i
+        language: system
+        types_or: [c++, c]
 
       # Commit messages must reference an issue (#N) on a non-comment line, e.g.
       # "#12 add X". Merge, revert and fixup/squash/amend commits made by git are exempt.
