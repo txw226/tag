@@ -1,5 +1,5 @@
 [project]
-name = "tooth"
+name = "tag"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tooth = "tooth:main"
+tag = "tag:main"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]
@@ -35,3 +35,8 @@ warn_redundant_casts = true
 [[tool.mypy.overrides]]
 module = ["plotly", "plotly.*"]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# importlib mode lets tests/filtering and tests/propagation hold same-named files without __init__.py
+addopts = ["--import-mode=importlib"]
