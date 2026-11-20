@@ -19,7 +19,7 @@ add_library(tag_flags INTERFACE)
 target_compile_options(tag_flags INTERFACE -fno-math-errno $<$<BOOL:${TAG_NATIVE}>:-march=native>)
 
 # The C++ core: plain C++ types only, no Python.
-add_library(tag_core STATIC cpp/src/propagation/kepler.cpp)
+add_library(tag_core STATIC cpp/src/propagation/kepler.cpp cpp/src/propagation/two_body.cpp)
 target_include_directories(tag_core PUBLIC cpp/include)
 target_link_libraries(tag_core PUBLIC tag_flags)
 set_target_properties(tag_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -48,7 +48,7 @@ if(TAG_BUILD_BENCHMARKS)
     GIT_TAG v4.3.11
     GIT_SHALLOW TRUE)
   FetchContent_MakeAvailable(nanobench)
-  add_executable(tag_bench cpp/bench/main.cpp cpp/bench/kepler_bench.cpp)
+  add_executable(tag_bench cpp/bench/main.cpp cpp/bench/kepler_bench.cpp cpp/bench/two_body_bench.cpp)
   target_link_libraries(tag_bench PRIVATE tag_core nanobench)
   set_target_properties(tag_bench PROPERTIES INTERPROCEDURAL_OPTIMIZATION ${tag_ipo_supported})
 endif()

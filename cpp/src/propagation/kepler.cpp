@@ -33,12 +33,14 @@ double markley_starter(double m, double e) noexcept {
 
 } // namespace
 
-double eccentric_anomaly(double mean_anomaly, double e) noexcept {
-  // Reduce to m in [-pi, pi], then solve for |m| and restore the sign (E is odd in M).
-  const double k = std::nearbyint(mean_anomaly / two_pi_hi);
-  const double m = std::fma(-k, two_pi_lo, std::fma(-k, two_pi_hi, mean_anomaly));
-  const double a = std::abs(m);
+double reduce_angle(double angle) noexcept {
+  const double k = std::nearbyint(angle / two_pi_hi);
+  return std::fma(-k, two_pi_lo, std::fma(-k, two_pi_hi, angle));
+}
 
+KeplerSolution solve_kepler_reduced(double mean_anomaly, double e) noexcept {
+  // Solve for |M|, then restore the sign (E is odd in M, so sin E is too and cos E is even).
+  const double a = std::abs(mean_anomaly);
   double E = markley_starter(a, e);
   // One sin/cos evaluation; later steps update them by angle addition. Corrections are below
   // ~5e-4 rad, where these Taylor series of sin and cos are exact to ~1e-27.
@@ -56,7 +58,14 @@ double eccentric_anomaly(double mean_anomaly, double e) noexcept {
     c = c * cos_d - s * sin_d;
     s = s_next;
   }
-  return std::copysign(E, m) + k * two_pi_hi + k * two_pi_lo;
+  const double sign = std::copysign(1.0, mean_anomaly);
+  return {sign * E, sign * s, c};
+}
+
+double eccentric_anomaly(double mean_anomaly, double e) noexcept {
+  const double k = std::nearbyint(mean_anomaly / two_pi_hi);
+  const double E = solve_kepler_reduced(reduce_angle(mean_anomaly), e).E;
+  return E + k * two_pi_hi + k * two_pi_lo;
 }
 
 } // namespace tag::propagation

@@ -1,13 +1,18 @@
 // The only translation unit that includes nanobind: adapts Python arguments to the C++ core.
+#include <algorithm>
 #include <cmath>
 #include <format>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/array.h>
 
 #include "tag/propagation/cartesian.hpp"
 #include "tag/propagation/kepler.hpp"
+#include "tag/propagation/two_body.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -52,6 +57,22 @@ void require_elliptic(const tp::State &rv, double mu) {
   }
 }
 
+using Vector6 = nb::ndarray<nb::numpy, double, nb::shape<6>>;
+
+// A new numpy array owning a copy of the state.
+Vector6 to_numpy(const tp::State &rv) {
+  auto *data = new double[6];
+  std::copy(rv.begin(), rv.end(), data);
+  nb::capsule owner(data, [](void *p) noexcept { delete[] static_cast<double *>(p); });
+  return Vector6(data, {6}, owner);
+}
+
+void require_finite_time(double dt) {
+  if (!std::isfinite(dt)) {
+    throw nb::value_error(std::format("dt must be finite, got {}", dt).c_str());
+  }
+}
+
 } // namespace
 
 NB_MODULE(_propagation, m) {
@@ -74,4 +95,35 @@ NB_MODULE(_propagation, m) {
       "mean_anomaly"_a, "e"_a,
       "Solve Kepler's equation E - e sin E = M for the eccentric anomaly E (radians).\n\n"
       "E is in the same revolution as M. Raises ValueError unless 0 <= e < 1 and M is finite.");
+
+  nb::class_<tp::TwoBodyOrbit>(
+      m, "TwoBodyOrbit",
+      "Two-body propagation of an elliptic orbit from an osculating Cartesian state.\n\n"
+      "``rv = [x, y, z, vx, vy, vz]`` is the state at the epoch, in units consistent with ``mu``\n"
+      "(default EARTH_MU: km, km/s, s). Near-circular, near-equatorial and GEO orbits are\n"
+      "accurate. Raises HyperbolicOrbitError if e >= 1 (hyperbolic, parabolic or rectilinear),\n"
+      "and ValueError for a non-finite state, zero position or mu <= 0.")
+      .def(
+          "__init__",
+          [](tp::TwoBodyOrbit *self, const tp::State &rv, double mu) {
+            require_elliptic(rv, mu);
+            new (self) tp::TwoBodyOrbit(rv, mu);
+          },
+          nb::sig("def __init__(self, rv: numpy.typing.ArrayLike, mu: float = EARTH_MU) -> None"), "rv"_a,
+          "mu"_a = tp::earth_mu)
+      .def(
+          "propagate",
+          [](const tp::TwoBodyOrbit &orbit, double dt) {
+            require_finite_time(dt);
+            return to_numpy(orbit.propagate(dt));
+          },
+          nb::sig("def propagate(self, dt: float) -> numpy.typing.NDArray[numpy.float64]"), "dt"_a,
+          "The Cartesian state ``dt`` seconds (any sign) after the epoch, as a float64 array of shape (6,).\n\n"
+          "Precision doesn't decay with long ``dt``: the mean anomaly is reduced modulo 2 pi.")
+      .def_prop_ro("mu", &tp::TwoBodyOrbit::mu, "Gravitational parameter.")
+      .def_prop_ro("semi_major_axis", &tp::TwoBodyOrbit::semi_major_axis, "Semi-major axis a.")
+      .def_prop_ro("eccentricity", &tp::TwoBodyOrbit::eccentricity, "Eccentricity e, in [0, 1).")
+      .def_prop_ro(
+          "period", [](const tp::TwoBodyOrbit &orbit) { return 2.0 * std::numbers::pi / orbit.mean_motion(); },
+          "Orbital period, 2 pi / n.");
 }
