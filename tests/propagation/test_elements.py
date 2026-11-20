@@ -233,3 +233,9 @@ def test_invalid_state_raises_value_error() -> None:
         cartesian_to_equinoctial([7000.0, 0.0, math.inf, 0.0, 7.5, 0.0])
     with pytest.raises(ValueError, match="mu"):
         cartesian_to_keplerian(VALLADO_RV, mu=-1.0)
+
+
+def test_retrograde_equatorial_state_raises_for_equinoctial() -> None:
+    # i = 180 deg is the direct equinoctial set's singularity (p, q = tan(i/2) * ... diverge).
+    with pytest.raises(ValueError, match="retrograde equatorial"):
+        cartesian_to_equinoctial([7000.0, 0.0, 0.0, 0.0, -7.6, 0.0])

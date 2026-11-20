@@ -180,7 +180,12 @@ NB_MODULE(_propagation, m) {
       "cartesian_to_equinoctial",
       [](const tp::State &rv, double mu) {
         require_elliptic(rv, mu);
-        return to_numpy(tp::cartesian_to_equinoctial(rv, mu));
+        const tp::Elements eq = tp::cartesian_to_equinoctial(rv, mu);
+        // Only an exactly retrograde equatorial orbit (i = pi) divides by zero in p and q.
+        if (!std::isfinite(eq[tp::eq::p]) || !std::isfinite(eq[tp::eq::q])) {
+          throw nb::value_error("equinoctial elements are singular for a retrograde equatorial orbit (i = 180 deg)");
+        }
+        return to_numpy(eq);
       },
       "rv"_a, "mu"_a = tp::earth_mu,
       nb::sig("def cartesian_to_equinoctial(rv: " ARRAY_LIKE ", mu: float = EARTH_MU) -> " FLOAT_ARRAY),
@@ -188,7 +193,8 @@ NB_MODULE(_propagation, m) {
       "Direct set: h = e sin(argp + raan), k = e cos(argp + raan), p = tan(i/2) sin(raan),\n"
       "q = tan(i/2) cos(raan), lambda = M + argp + raan (mean longitude, radians, in [0, 2pi)); index with\n"
       "the EQ_* constants. Well defined for circular and equatorial orbits; singular only for retrograde\n"
-      "equatorial orbits (i = 180 deg). Raises HyperbolicOrbitError if e >= 1, ValueError for invalid input.");
+      "equatorial orbits (i = 180 deg), which raise ValueError. Raises HyperbolicOrbitError if e >= 1, ValueError\n"
+      "for invalid input.");
 
   m.def(
       "equinoctial_to_cartesian",

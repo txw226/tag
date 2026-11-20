@@ -70,7 +70,8 @@ def cartesian_to_equinoctial(rv: numpy.typing.ArrayLike, mu: float = EARTH_MU) -
     Direct set: h = e sin(argp + raan), k = e cos(argp + raan), p = tan(i/2) sin(raan),
     q = tan(i/2) cos(raan), lambda = M + argp + raan (mean longitude, radians, in [0, 2pi)); index with
     the EQ_* constants. Well defined for circular and equatorial orbits; singular only for retrograde
-    equatorial orbits (i = 180 deg). Raises HyperbolicOrbitError if e >= 1, ValueError for invalid input.
+    equatorial orbits (i = 180 deg), which raise ValueError. Raises HyperbolicOrbitError if e >= 1, ValueError
+    for invalid input.
     """
 
 def equinoctial_to_cartesian(
