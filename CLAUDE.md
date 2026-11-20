@@ -27,7 +27,7 @@ uv run pre-commit install                  # once per clone: installs the pre-co
 uv run pre-commit run --all-files          # run the hooks over the whole repo
 ```
 
-The user's shell setup (`~/tooth.zshrc`) activates `.venv` automatically and defines `$ToothRoot` and the `cdtooth` alias.
+The user's shell setup (`~/tag.zshrc`) activates `.venv` automatically and defines `$TagRoot` and the `cdtag` alias.
 
 ## Architecture
 
@@ -52,7 +52,7 @@ One package `tag` (ADR 0001): `tag.filtering` holds everything below, and a futu
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues for txw226/tooth, using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub Issues for txw226/tag, using the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

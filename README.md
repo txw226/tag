@@ -8,7 +8,7 @@ New to Kalman filters? Start with the [tutorial](docs/kalman_tutorial.md).
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and git. uv installs Python 3.14 itself (pinned in `.python-version`).
 
 ```sh
-git clone git@github.com:txw226/tooth.git && cd tooth
+git clone git@github.com:txw226/tag.git && cd tag
 uv sync                          # create .venv with the package and dev tools (pytest, ruff, mypy, pre-commit)
 uv run pre-commit install        # enable the pre-commit and commit-msg hooks
 uv run pytest -q                 # check the setup: all tests should pass
