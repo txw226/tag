@@ -1,0 +1,169 @@
+#include "tag/propagation/elements.hpp"
+
+#include <cmath>
+#include <numbers>
+
+#include "tag/propagation/kepler.hpp"
+
+namespace tag::propagation {
+
+namespace {
+
+using std::numbers::pi;
+
+// Below this, e counts as zero (circular) and sin(i) as zero (equatorial).
+constexpr double singular_tol = 1e-11;
+
+// Wraps an angle to [0, 2pi).
+double wrap_two_pi(double angle) noexcept {
+  const double wrapped = std::fmod(angle, 2.0 * pi);
+  return wrapped < 0.0 ? wrapped + 2.0 * pi : wrapped;
+}
+
+// Signed angle from direction d to direction x, both in the plane with normal h_hat.
+double angle_in_plane(const Vec3 &d, const Vec3 &x, const Vec3 &h_hat) noexcept {
+  return std::atan2(dot(cross(d, x), h_hat), dot(d, x));
+}
+
+// The equinoctial frame: f and g span the orbit plane (f is x rotated by the direct-set rotation
+// through p, q); the orbit normal is f x g.
+struct EquinoctialFrame {
+  Vec3 f, g;
+};
+
+EquinoctialFrame equinoctial_frame(double p, double q) noexcept {
+  const double s2 = 1.0 + p * p + q * q;
+  return {{(1.0 - p * p + q * q) / s2, 2.0 * p * q / s2, -2.0 * p / s2},
+          {2.0 * p * q / s2, (1.0 + p * p - q * q) / s2, 2.0 * q / s2}};
+}
+
+} // namespace
+
+Elements cartesian_to_keplerian(const State &rv, double mu, Anomaly anomaly) noexcept {
+  const Vec3 r = position(rv);
+  const Vec3 v = velocity(rv);
+  const Vec3 h = cross(r, v);
+  const double h_norm = norm(h);
+  const Vec3 h_hat = {h[0] / h_norm, h[1] / h_norm, h[2] / h_norm};
+  const Vec3 e_vec = eccentricity_vector(rv, mu);
+  const double e = norm(e_vec);
+  const double a = 1.0 / (2.0 / norm(r) - dot(v, v) / mu);
+
+  // Node vector z x h, and i from atan2 (accurate at every inclination, unlike acos).
+  const Vec3 node = {-h[1], h[0], 0.0};
+  const double node_norm = norm(node);
+  const double i = std::atan2(node_norm, h[2]);
+  const bool equatorial = node_norm < singular_tol * h_norm;
+  const bool circular = e < singular_tol;
+
+  // Reference direction for argp: the node, or x for an equatorial orbit.
+  const Vec3 ref = equatorial ? Vec3{1.0, 0.0, 0.0} : node;
+  const double raan = equatorial ? 0.0 : std::atan2(node[1], node[0]);
+  const double argp = circular ? 0.0 : angle_in_plane(ref, e_vec, h_hat);
+  // The true anomaly is measured from periapsis, or from the reference direction when circular.
+  const double nu = angle_in_plane(circular ? ref : e_vec, r, h_hat);
+
+  double last = nu;
+  if (anomaly != Anomaly::true_anomaly) {
+    const double E = std::atan2(std::sqrt(1.0 - e * e) * std::sin(nu), e + std::cos(nu));
+    last = anomaly == Anomaly::eccentric ? E : E - e * std::sin(E);
+  }
+  return {a, e, i, wrap_two_pi(raan), wrap_two_pi(argp), wrap_two_pi(last)};
+}
+
+State keplerian_to_cartesian(const Elements &kep, double mu, Anomaly anomaly) noexcept {
+  const double a = kep[kep::a];
+  const double e = kep[kep::e];
+  const double s_e = std::sqrt(1.0 - e * e);
+  const double last = kep[kep::anomaly];
+  double E = last;
+  if (anomaly == Anomaly::mean) {
+    E = eccentric_anomaly(last, e);
+  } else if (anomaly == Anomaly::true_anomaly) {
+    E = std::atan2(s_e * std::sin(last), e + std::cos(last));
+  }
+  const double sin_E = std::sin(E);
+  const double cos_E = std::cos(E);
+
+  // Position and velocity in the perifocal frame (P towards periapsis, Q 90 degrees ahead).
+  const double x_pf = a * (cos_E - e);
+  const double y_pf = a * s_e * sin_E;
+  const double vel = std::sqrt(mu / a) / (1.0 - e * cos_E);
+  const double vx_pf = -vel * sin_E;
+  const double vy_pf = vel * s_e * cos_E;
+
+  const double cO = std::cos(kep[kep::raan]), sO = std::sin(kep[kep::raan]);
+  const double cw = std::cos(kep[kep::argp]), sw = std::sin(kep[kep::argp]);
+  const double ci = std::cos(kep[kep::i]), si = std::sin(kep[kep::i]);
+  const Vec3 P = {cO * cw - sO * sw * ci, sO * cw + cO * sw * ci, sw * si};
+  const Vec3 Q = {-cO * sw - sO * cw * ci, -sO * sw + cO * cw * ci, cw * si};
+  State rv;
+  for (int j = 0; j < 3; ++j) {
+    rv[j] = x_pf * P[j] + y_pf * Q[j];
+    rv[j + 3] = vx_pf * P[j] + vy_pf * Q[j];
+  }
+  return rv;
+}
+
+// Equinoctial formulas follow Broucke & Cefola (1972), "On the equinoctial orbit elements",
+// Celest. Mech. 5, 303-310, direct set (retrograde factor +1).
+
+Elements cartesian_to_equinoctial(const State &rv, double mu) noexcept {
+  const Vec3 r = position(rv);
+  const Vec3 v = velocity(rv);
+  const Vec3 h = cross(r, v);
+  const double h_norm = norm(h);
+  const double a = 1.0 / (2.0 / norm(r) - dot(v, v) / mu);
+
+  // w = h / |h| = [2p, -2q, 1 - p^2 - q^2] / (1 + p^2 + q^2), and 1 + w_z = 2 / (1 + p^2 + q^2).
+  const double one_plus_wz = 1.0 + h[2] / h_norm;
+  const double p = h[0] / h_norm / one_plus_wz;
+  const double q = -h[1] / h_norm / one_plus_wz;
+  const auto [f, g] = equinoctial_frame(p, q);
+
+  const Vec3 e_vec = eccentricity_vector(rv, mu);
+  const double eh = dot(e_vec, g);
+  const double ek = dot(e_vec, f);
+
+  // Eccentric longitude F from the in-plane position, then Kepler's equation in longitude form.
+  const double x1 = dot(r, f);
+  const double y1 = dot(r, g);
+  const double s_e = std::sqrt(1.0 - eh * eh - ek * ek);
+  const double beta = 1.0 / (1.0 + s_e);
+  const double sin_F = eh + ((1.0 - eh * eh * beta) * y1 - eh * ek * beta * x1) / (a * s_e);
+  const double cos_F = ek + ((1.0 - ek * ek * beta) * x1 - eh * ek * beta * y1) / (a * s_e);
+  const double lambda = std::atan2(sin_F, cos_F) + eh * cos_F - ek * sin_F;
+  return {a, eh, ek, p, q, wrap_two_pi(lambda)};
+}
+
+State equinoctial_to_cartesian(const Elements &eq, double mu) noexcept {
+  const double a = eq[eq::a];
+  const double eh = eq[eq::h];
+  const double ek = eq[eq::k];
+  const auto [f, g] = equinoctial_frame(eq[eq::p], eq[eq::q]);
+
+  // lambda = F + h cos F - k sin F is Kepler's equation in E = F - varpi, with varpi the
+  // longitude of periapsis: lambda - varpi = E - e sin E. At e = 0, varpi = 0 and F = lambda exactly.
+  const double e = std::sqrt(eh * eh + ek * ek);
+  const double varpi = std::atan2(eh, ek);
+  const double F = varpi + eccentric_anomaly(eq[eq::lambda] - varpi, e);
+  const double sin_F = std::sin(F);
+  const double cos_F = std::cos(F);
+
+  const double beta = 1.0 / (1.0 + std::sqrt(1.0 - e * e));
+  const double hk_beta = eh * ek * beta;
+  const double x1 = a * ((1.0 - eh * eh * beta) * cos_F + hk_beta * sin_F - ek);
+  const double y1 = a * ((1.0 - ek * ek * beta) * sin_F + hk_beta * cos_F - eh);
+  // a^2 n / r = sqrt(mu / a) / (1 - k cos F - h sin F).
+  const double vel = std::sqrt(mu / a) / (1.0 - ek * cos_F - eh * sin_F);
+  const double vx1 = vel * (hk_beta * cos_F - (1.0 - eh * eh * beta) * sin_F);
+  const double vy1 = vel * ((1.0 - ek * ek * beta) * cos_F - hk_beta * sin_F);
+  State rv;
+  for (int j = 0; j < 3; ++j) {
+    rv[j] = x1 * f[j] + y1 * g[j];
+    rv[j + 3] = vx1 * f[j] + vy1 * g[j];
+  }
+  return rv;
+}
+
+} // namespace tag::propagation
