@@ -1,10 +1,17 @@
 import math
+from collections.abc import Callable
 
 import numpy as np
 import pytest
 from numpy.typing import ArrayLike
 
 from tag.propagation import (
+    EQ_A,
+    EQ_H,
+    EQ_K,
+    EQ_LAMBDA,
+    EQ_P,
+    EQ_Q,
     KEP_A,
     KEP_ANOMALY,
     KEP_ARGP,
@@ -12,7 +19,10 @@ from tag.propagation import (
     KEP_I,
     KEP_RAAN,
     AnomalyKind,
+    HyperbolicOrbitError,
+    cartesian_to_equinoctial,
     cartesian_to_keplerian,
+    equinoctial_to_cartesian,
     keplerian_to_cartesian,
 )
 
@@ -112,3 +122,114 @@ def test_keplerian_singular_conventions() -> None:
     kep = cartesian_to_keplerian(STATES["equatorial_elliptic"], anomaly="true")
     assert kep[KEP_I] == 0.0 and kep[KEP_RAAN] == 0.0
     assert angle_diff(kep[KEP_ARGP], 0.0) == pytest.approx(0.0, abs=1e-14)
+
+
+@pytest.mark.parametrize("name", STATES)
+def test_equinoctial_round_trip_reproduces_state(name: str) -> None:
+    rv = STATES[name]
+    assert_same_state(equinoctial_to_cartesian(cartesian_to_equinoctial(rv)), rv)
+
+
+@pytest.mark.parametrize("name", ["vallado", "leo", "molniya", "retrograde"])
+def test_equinoctial_matches_keplerian_definition(name: str) -> None:
+    kep = cartesian_to_keplerian(STATES[name], anomaly="mean")
+    eq = cartesian_to_equinoctial(STATES[name])
+    e, i, raan, argp, m = kep[[KEP_E, KEP_I, KEP_RAAN, KEP_ARGP, KEP_ANOMALY]]
+    np.testing.assert_allclose(eq[EQ_A], kep[KEP_A], rtol=1e-12)
+    np.testing.assert_allclose(
+        eq[[EQ_H, EQ_K, EQ_P, EQ_Q]],
+        [
+            e * math.sin(argp + raan),
+            e * math.cos(argp + raan),
+            math.tan(i / 2) * math.sin(raan),
+            math.tan(i / 2) * math.cos(raan),
+        ],
+        rtol=0,
+        atol=1e-13,
+    )
+    assert angle_diff(eq[EQ_LAMBDA], m + argp + raan) == pytest.approx(0.0, abs=1e-12)
+
+
+@pytest.mark.parametrize("lam", [0.0, 0.3, 2.0, math.pi, 5.5])
+def test_equinoctial_exact_for_circular_equatorial_orbit(lam: float) -> None:
+    # e = 0 and i = 0 exactly: the classical singular case, where equinoctial elements stay exact.
+    eq = np.zeros(6)
+    eq[EQ_A], eq[EQ_LAMBDA] = R_GEO, lam
+    rv = equinoctial_to_cartesian(eq)
+    expected = [R_GEO * math.cos(lam), R_GEO * math.sin(lam), 0.0, -V_GEO * math.sin(lam), V_GEO * math.cos(lam), 0.0]
+    assert_same_state(rv, np.array(expected), rtol=1e-15)
+    again = cartesian_to_equinoctial(rv)
+    assert again[EQ_A] == pytest.approx(R_GEO, rel=1e-14)
+    np.testing.assert_allclose(again[[EQ_H, EQ_K, EQ_P, EQ_Q]], 0.0, rtol=0, atol=1e-15)
+    assert angle_diff(again[EQ_LAMBDA], lam) == pytest.approx(0.0, abs=1e-15)
+
+
+@pytest.mark.parametrize(
+    "eq_in",
+    [
+        [26600.0, 0.5, -0.5, 0.3, 0.4, 1.0],  # e = 0.71
+        [7000.0, 0.0, 0.0, 0.2, -0.1, 4.0],  # circular, inclined
+        [42164.0, 1e-9, -2e-9, 0.0, 0.0, 2.5],  # nearly circular, equatorial
+        [7000.0, 0.01, 0.02, 1e-9, 1e-9, 6.0],  # nearly equatorial
+    ],
+)
+def test_equinoctial_elements_round_trip(eq_in: list[float]) -> None:
+    again = cartesian_to_equinoctial(equinoctial_to_cartesian(eq_in))
+    np.testing.assert_allclose(again[EQ_A], eq_in[EQ_A], rtol=1e-13)
+    np.testing.assert_allclose(
+        again[[EQ_H, EQ_K, EQ_P, EQ_Q]], np.array(eq_in)[[EQ_H, EQ_K, EQ_P, EQ_Q]], rtol=0, atol=1e-14
+    )
+    assert angle_diff(again[EQ_LAMBDA], eq_in[EQ_LAMBDA]) == pytest.approx(0.0, abs=1e-13)
+
+
+V_ESCAPE = math.sqrt(2 * MU / 7000)
+NOT_ELLIPTIC = {
+    "hyperbolic": [7000.0, 0.0, 0.0, 0.0, 1.2 * V_ESCAPE, 0.0],
+    "parabolic": [7000.0, 0.0, 0.0, 0.0, V_ESCAPE, 0.0],
+    "rectilinear": [7000.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+}
+
+
+@pytest.mark.parametrize("convert", [cartesian_to_keplerian, cartesian_to_equinoctial])
+@pytest.mark.parametrize("name", NOT_ELLIPTIC)
+def test_non_elliptic_state_raises_hyperbolic_orbit_error(
+    convert: Callable[[ArrayLike], np.ndarray], name: str
+) -> None:
+    with pytest.raises(HyperbolicOrbitError, match="eccentricity"):
+        convert(NOT_ELLIPTIC[name])
+
+
+@pytest.mark.parametrize("e", [1.0, 1.5])
+def test_keplerian_elements_with_e_at_least_one_raise(e: float) -> None:
+    with pytest.raises(HyperbolicOrbitError, match="eccentricity"):
+        keplerian_to_cartesian([7000.0, e, 0.1, 0.2, 0.3, 0.4])
+
+
+def test_equinoctial_elements_with_e_at_least_one_raise() -> None:
+    with pytest.raises(HyperbolicOrbitError, match="eccentricity"):
+        equinoctial_to_cartesian([7000.0, 0.6, 0.8, 0.0, 0.0, 0.0])
+
+
+@pytest.mark.parametrize(
+    "elements",
+    [
+        [-7000.0, 0.1, 0.1, 0.2, 0.3, 0.4],  # negative a
+        [7000.0, -0.1, 0.1, 0.2, 0.3, 0.4],  # negative e
+        [7000.0, 0.1, math.nan, 0.2, 0.3, 0.4],
+    ],
+)
+def test_invalid_keplerian_elements_raise_value_error(elements: list[float]) -> None:
+    with pytest.raises(ValueError):
+        keplerian_to_cartesian(elements)
+
+
+def test_unknown_anomaly_kind_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="anomaly"):
+        cartesian_to_keplerian(VALLADO_RV, anomaly="hyperbolic")  # type: ignore[arg-type]
+
+
+def test_invalid_state_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        cartesian_to_equinoctial([7000.0, 0.0, math.inf, 0.0, 7.5, 0.0])
+    with pytest.raises(ValueError, match="mu"):
+        cartesian_to_keplerian(VALLADO_RV, mu=-1.0)

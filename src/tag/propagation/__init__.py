@@ -21,8 +21,10 @@ from tag.propagation._propagation import (
     KEP_I,
     KEP_RAAN,
     HyperbolicOrbitError,
+    cartesian_to_equinoctial,
     cartesian_to_keplerian,
     eccentric_anomaly,
+    equinoctial_to_cartesian,
     keplerian_to_cartesian,
 )
 
@@ -45,7 +47,9 @@ __all__ = [
     "KEP_RAAN",
     "AnomalyKind",
     "HyperbolicOrbitError",
+    "cartesian_to_equinoctial",
     "cartesian_to_keplerian",
     "eccentric_anomaly",
+    "equinoctial_to_cartesian",
     "keplerian_to_cartesian",
 ]

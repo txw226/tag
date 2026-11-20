@@ -64,13 +64,13 @@ void require_elliptic(const tp::State &rv, double mu) {
 #define ANOMALY "typing.Literal['mean', 'true', 'eccentric']"
 
 // A float64 numpy array of shape (6,) owning a copy of the values.
-using Array6 = nb::ndarray<nb::numpy, double, nb::shape<6>>;
+using Vector6 = nb::ndarray<nb::numpy, double, nb::shape<6>>;
 
-Array6 to_numpy(const std::array<double, 6> &values) {
+Vector6 to_numpy(const tp::State &rv) {
   auto *data = new double[6];
-  std::copy(values.begin(), values.end(), data);
+  std::copy(rv.begin(), rv.end(), data);
   nb::capsule owner(data, [](void *p) noexcept { delete[] static_cast<double *>(p); });
-  return Array6(data, {6}, owner);
+  return Vector6(data, {6}, owner);
 }
 
 tp::Anomaly parse_anomaly(const std::string &anomaly) {
@@ -167,6 +167,34 @@ NB_MODULE(_propagation, m) {
       "Angles are in radians (any value); index with the KEP_* constants. anomaly says what the last\n"
       "element is: 'mean', 'true' or 'eccentric'. Raises HyperbolicOrbitError if e >= 1, ValueError for\n"
       "invalid input.");
+
+  m.def(
+      "cartesian_to_equinoctial",
+      [](const tp::State &rv, double mu) {
+        require_elliptic(rv, mu);
+        return to_numpy(tp::cartesian_to_equinoctial(rv, mu));
+      },
+      "rv"_a, "mu"_a = tp::earth_mu,
+      nb::sig("def cartesian_to_equinoctial(rv: " ARRAY_LIKE ", mu: float = EARTH_MU) -> " FLOAT_ARRAY),
+      "Convert a Cartesian state [r, v] to equinoctial elements [a, h, k, p, q, lambda].\n\n"
+      "Direct set: h = e sin(argp + raan), k = e cos(argp + raan), p = tan(i/2) sin(raan),\n"
+      "q = tan(i/2) cos(raan), lambda = M + argp + raan (mean longitude, radians, in [0, 2pi)); index with\n"
+      "the EQ_* constants. Well defined for circular and equatorial orbits; singular only for retrograde\n"
+      "equatorial orbits (i = 180 deg). Raises HyperbolicOrbitError if e >= 1, ValueError for invalid input.");
+
+  m.def(
+      "equinoctial_to_cartesian",
+      [](const tp::Elements &eq, double mu) {
+        require_positive_mu(mu);
+        require_finite(eq, "elements");
+        require_elliptic_shape(eq[tp::eq::a], std::hypot(eq[tp::eq::h], eq[tp::eq::k]));
+        return to_numpy(tp::equinoctial_to_cartesian(eq, mu));
+      },
+      "elements"_a, "mu"_a = tp::earth_mu,
+      nb::sig("def equinoctial_to_cartesian(elements: " ARRAY_LIKE ", mu: float = EARTH_MU) -> " FLOAT_ARRAY),
+      "Convert equinoctial elements [a, h, k, p, q, lambda] to a Cartesian state [r, v].\n\n"
+      "See cartesian_to_equinoctial for the definitions; index with the EQ_* constants. Raises\n"
+      "HyperbolicOrbitError if e = sqrt(h^2 + k^2) >= 1, ValueError for invalid input.");
 
   m.def(
       "eccentric_anomaly",

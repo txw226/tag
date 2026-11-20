@@ -63,6 +63,26 @@ def keplerian_to_cartesian(
     invalid input.
     """
 
+def cartesian_to_equinoctial(rv: numpy.typing.ArrayLike, mu: float = EARTH_MU) -> numpy.typing.NDArray[numpy.float64]:
+    """
+    Convert a Cartesian state [r, v] to equinoctial elements [a, h, k, p, q, lambda].
+
+    Direct set: h = e sin(argp + raan), k = e cos(argp + raan), p = tan(i/2) sin(raan),
+    q = tan(i/2) cos(raan), lambda = M + argp + raan (mean longitude, radians, in [0, 2pi)); index with
+    the EQ_* constants. Well defined for circular and equatorial orbits; singular only for retrograde
+    equatorial orbits (i = 180 deg). Raises HyperbolicOrbitError if e >= 1, ValueError for invalid input.
+    """
+
+def equinoctial_to_cartesian(
+    elements: numpy.typing.ArrayLike, mu: float = EARTH_MU
+) -> numpy.typing.NDArray[numpy.float64]:
+    """
+    Convert equinoctial elements [a, h, k, p, q, lambda] to a Cartesian state [r, v].
+
+    See cartesian_to_equinoctial for the definitions; index with the EQ_* constants. Raises
+    HyperbolicOrbitError if e = sqrt(h^2 + k^2) >= 1, ValueError for invalid input.
+    """
+
 def eccentric_anomaly(mean_anomaly: float, e: float) -> float:
     """
     Solve Kepler's equation E - e sin E = M for the eccentric anomaly E (radians).
