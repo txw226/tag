@@ -1,5 +1,9 @@
-"""Orbit propagation, backed by a compiled C++ core."""
+"""Orbit propagation, backed by a compiled C++ core.
 
-from tag.propagation._propagation import eccentric_anomaly
+Units are whatever the caller uses consistently with ``mu``; the default ``EARTH_MU`` is in km^3/s^2,
+so states are then in km and km/s and times in seconds.
+"""
 
-__all__ = ["eccentric_anomaly"]
+from tag.propagation._propagation import EARTH_MU, HyperbolicOrbitError, eccentric_anomaly
+
+__all__ = ["EARTH_MU", "HyperbolicOrbitError", "eccentric_anomaly"]
