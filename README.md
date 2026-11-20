@@ -1,5 +1,5 @@
-# tooth
-pulling teeth and taking names
+# tag
+Satellite orbit propagation and Kalman filtering. Today the package holds the filtering half, `tag.filtering`.
 
 New to Kalman filters? Start with the [tutorial](docs/kalman_tutorial.md).
 

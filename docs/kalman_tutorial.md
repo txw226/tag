@@ -2,7 +2,7 @@
 
 How a Kalman filter works and how to tell whether yours is working. This is about the ideas, not this library's API; every
 section points at a runnable demo that shows the idea. Run each demo from the repo root; it prints a summary and opens an
-interactive plot (also saved in `examples/out/`). Add `--no-show` to skip opening the browser and `--seed N` for another run.
+interactive plot (also saved in `examples/filtering/out/`). Add `--no-show` to skip opening the browser and `--seed N` for another run.
 
 | § | Topic | Demo |
 |---|---|---|
@@ -69,7 +69,7 @@ $$x = x^- + K y \qquad P = (I - K H)\, P^-$$
 | S | innovation covariance | how big the filter *expects* the surprise to be (model uncertainty + sensor noise) | |
 | K | Kalman gain | how far to move toward the measurement, per state element | settles to a constant |
 
-**Demo: `uv run python examples/kf_anatomy.py`** draws one cycle as 2σ ellipses for a ball thrown straight up, with an
+**Demo: `uv run python examples/filtering/kf_anatomy.py`** draws one cycle as 2σ ellipses for a ball thrown straight up, with an
 altimeter that measures height only.
 
 - **Panel 1 (predict):** the round grey ellipse (P) is **sheared** by F into a tilted one: if the velocity is off, the
@@ -83,7 +83,7 @@ altimeter that measures height only.
 
 Try `--step 6`: by then the correlation is +0.85 and the update moves vy almost as much as y.
 
-**Demo: `uv run python examples/projectile_kf.py`** is the same filter in 2D. Position RMSE drops from 2.84 m (raw
+**Demo: `uv run python examples/filtering/projectile_kf.py`** is the same filter in 2D. Position RMSE drops from 2.84 m (raw
 measurements) to 1.13 m, and the velocity panel shows a quantity that is never measured converging to the truth, with its
 ±2σ band narrowing.
 
@@ -114,11 +114,11 @@ The tangent is a good stand-in only while the function is nearly straight across
 passing close to a camera, or a huge initial uncertainty, breaks this, and the EKF becomes overconfident or diverges.
 With linear f and h the EKF reduces to the LKF exactly.
 
-**Demo: `uv run python examples/drag_projectile_ekf.py`.** Drag model + radar. The radar's polar measurements, converted
+**Demo: `uv run python examples/filtering/drag_projectile_ekf.py`.** Drag model + radar. The radar's polar measurements, converted
 to x/y, have 2.62 m RMSE; the EKF gets 0.72 m. The printed vacuum range (255 m vs the true 110 m) shows how wrong a drag-free
 model would be.
 
-**Demo: `uv run python examples/drag_lkf_vs_ekf.py`.** Same drag flight, same linear GNSS sensor, three filters:
+**Demo: `uv run python examples/filtering/drag_lkf_vs_ekf.py`.** Same drag flight, same linear GNSS sensor, three filters:
 
 | filter | pos RMSE | ANEES (ideal 4) | what's happening |
 |---|---|---|---|
@@ -144,7 +144,7 @@ The filter fuses them by stacking updates: each measurement that arrives this st
 Geometry matters as much as noise: two cameras looking from very different angles pin down position well; two cameras
 side by side barely help in depth.
 
-**Demo: `uv run python examples/drag_projectile_fusion.py`.** One flight, three filters on the same data:
+**Demo: `uv run python examples/filtering/drag_projectile_fusion.py`.** One flight, three filters on the same data:
 
 - **GNSS only (2.71 m RMSE):** error jumps between fixes and grows during the 1 s outage (shaded), where the filter coasts
   on its model.
@@ -155,7 +155,7 @@ side by side barely help in depth.
 
 The bottom strip shows exactly when each sensor reported; compare it to the error spikes.
 
-**Demo: `uv run python examples/rocket_drag_estimation.py`.** Sensors can reveal things they never measure, as long as the
+**Demo: `uv run python examples/filtering/rocket_drag_estimation.py`.** Sensors can reveal things they never measure, as long as the
 model connects them. Add the rocket's drag coefficient Cd to the state; radar and GNSS see only position, but drag bends
 the trajectory, so the filter learns Cd (prior 0.45 ± 0.10 → 0.4036 ± 0.0019, truth 0.4047). Knowing Cd cuts position RMSE
 from 4.29 m (Cd fixed at the wrong guess) to 0.93 m. This trick is called **state augmentation**. It works only if the
@@ -165,7 +165,7 @@ parameter actually affects what's measured, i.e. it is *observable*.
 
 ## 5. What goes wrong
 
-**Demo: `uv run python examples/pitfalls.py`** runs one flight five ways with an otherwise perfect filter:
+**Demo: `uv run python examples/filtering/pitfalls.py`** runs one flight five ways with an otherwise perfect filter:
 
 | scenario | pos RMSE | ANEES (4) | ANIS (2) | what you see |
 |---|---|---|---|---|
@@ -196,7 +196,7 @@ Other common causes, demonstrated elsewhere:
 Q and R are the knobs. R usually comes from the sensor spec or from logging a stationary sensor. Q is the hard one: it
 stands for everything your model leaves out.
 
-**Demo: `uv run python examples/tuning_sweep.py`.** The truth uses random accelerations of 8 m/s² and a 0.5 m position
+**Demo: `uv run python examples/filtering/tuning_sweep.py`.** The truth uses random accelerations of 8 m/s² and a 0.5 m position
 sensor. The filter's Q (blue) or R (red) is scaled from 1/100 to 100 times the true value, over 50 Monte Carlo flights per
 point:
 
