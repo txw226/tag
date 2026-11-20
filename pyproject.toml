@@ -13,7 +13,7 @@ dependencies = [
 tag = "tag:main"
 
 [build-system]
-requires = ["scikit-build-core>=0.11", "nanobind>=3.1.0"]  # keep the nanobind floor in step with the dev group
+requires = ["scikit-build-core>=0.11", "nanobind>=3.1.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
@@ -24,6 +24,9 @@ build-dir = "build/{wheel_tag}"
 cmake.build-type = "Release"
 
 [tool.uv]
+# Build with the nanobind version locked for the dev group, so the compiled module and the stub
+# check in tests/propagation/test_stub.py always use the same nanobind.
+extra-build-dependencies = { tag = [{ requirement = "nanobind", match-runtime = true }] }
 # Rebuild the extension on `uv sync`/`uv run` only when one of these changes. Python files are
 # served live from src/ by scikit-build-core's editable redirect, so they need no rebuild.
 cache-keys = [
