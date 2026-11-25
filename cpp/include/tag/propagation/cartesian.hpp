@@ -8,6 +8,8 @@ namespace tag::propagation {
 using Vec3 = std::array<double, 3>;
 // A Cartesian state [x, y, z, vx, vy, vz]. Units are the caller's, consistent with mu (default km, s).
 using State = std::array<double, 6>;
+// A 6x6 matrix, row-major: m[6 * i + j] is row i, column j.
+using Matrix6 = std::array<double, 36>;
 
 // Earth's gravitational parameter, km^3/s^2 (EGM-96 / WGS-84 value, as used by Vallado).
 inline constexpr double earth_mu = 398600.4418;

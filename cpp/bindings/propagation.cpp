@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <format>
+#include <limits>
 #include <numbers>
 #include <span>
 #include <stdexcept>
@@ -16,6 +17,7 @@
 #include <nanobind/stl/string.h>
 
 #include "tag/propagation/cartesian.hpp"
+#include "tag/propagation/central_difference.hpp"
 #include "tag/propagation/elements.hpp"
 #include "tag/propagation/kepler.hpp"
 #include "tag/propagation/two_body.hpp"
@@ -77,6 +79,16 @@ Vector6 to_numpy(const tp::State &rv) {
   std::copy(rv.begin(), rv.end(), data);
   nb::capsule owner(data, [](void *p) noexcept { delete[] static_cast<double *>(p); });
   return Vector6(data, {6}, owner);
+}
+
+// A float64 numpy array of shape (6, 6) owning a copy of the row-major values.
+using Matrix66 = nb::ndarray<nb::numpy, double, nb::shape<6, 6>>;
+
+Matrix66 to_numpy(const tp::Matrix6 &m) {
+  auto *data = new double[36];
+  std::copy(m.begin(), m.end(), data);
+  nb::capsule owner(data, [](void *p) noexcept { delete[] static_cast<double *>(p); });
+  return Matrix66(data, {6, 6}, owner);
 }
 
 void require_finite_time(double dt) {
@@ -168,6 +180,12 @@ std::pair<nb::object, std::span<double>> output_array(nb::handle out, std::initi
                               .c_str());
   }
   return {nb::borrow(out), {array.data(), size}};
+}
+
+void require_disjoint(std::span<const double> a, std::span<const double> b, const char *what) {
+  if (a.data() < b.data() + b.size() && b.data() < a.data() + a.size()) {
+    throw nb::value_error(std::format("{} must not overlap", what).c_str());
+  }
 }
 
 tp::Anomaly parse_anomaly(const std::string &anomaly) {
@@ -352,6 +370,31 @@ NB_MODULE(_propagation, m) {
       "Every state and time is validated before anything is written (HyperbolicOrbitError or\n"
       "ValueError, naming the bad row or time), and the GIL is released while propagating.");
 
+  m.def(
+      "_two_body_central_difference_stm",
+      [](const tp::State &rv, double dt, double mu) {
+        require_elliptic(rv, mu);
+        require_finite_time(dt);
+        // Shrink the step with what sets the truncation error: the phase swept, n |dt|, and the
+        // eccentricity (nonlinearity near perigee). The exponent 1.5 on (1 - e) / (1 + e) was tuned by
+        // sweep: higher lets rounding dominate. Good to ~1e-10 of the largest entry at low e, ~1e-7 at
+        // e = 0.9, but only ~1e-5 at e = 0.99, where central differences are badly conditioned.
+        const tp::TwoBodyOrbit orbit(rv, mu);
+        const double phase = orbit.mean_motion() * std::abs(dt);
+        const double e = orbit.eccentricity();
+        const double relative_step =
+            std::cbrt(std::numeric_limits<double>::epsilon()) * std::pow((1.0 - e) / (1.0 + e), 1.5) / (1.0 + phase);
+        return to_numpy(tp::central_difference_stm(
+            rv, [&](const tp::State &x) { return tp::TwoBodyOrbit(x, mu).propagate(dt); }, relative_step));
+      },
+      "rv"_a, "dt"_a, "mu"_a = tp::earth_mu,
+      nb::sig("def _two_body_central_difference_stm(rv: " ARRAY_LIKE
+              ", dt: float, mu: float = EARTH_MU) -> " FLOAT_ARRAY),
+      "Internal test oracle: the two-body state transition matrix by central differences in C++.\n\n"
+      "Not public API (not exported from tag.propagation); tests compare analytic state transition\n"
+      "matrices against it. Entries are good to about 1e-10 of the largest at low e, 1e-7 at e = 0.9\n"
+      "and only about 1e-5 at e = 0.99.");
+
   nb::class_<tp::TwoBodyOrbit>(
       m, "TwoBodyOrbit",
       "Two-body propagation of an elliptic orbit from an osculating Cartesian state.\n\n"
@@ -391,6 +434,39 @@ NB_MODULE(_propagation, m) {
           "Row i equals ``propagate(dts[i])`` exactly. Pass ``out`` (a writable, C-contiguous float64 array\n"
           "of shape (N, 6)) to fill it in place; it is returned. Every dt is checked before anything is\n"
           "written, and the GIL is released while propagating.")
+      .def(
+          "propagate_with_stm",
+          [](const tp::TwoBodyOrbit &orbit, double dt) {
+            require_finite_time(dt);
+            const tp::StateWithStm x = orbit.propagate_with_stm(dt);
+            return nb::make_tuple(to_numpy(x.rv), to_numpy(x.stm));
+          },
+          nb::sig("def propagate_with_stm(self, dt: float) -> tuple[" FLOAT_ARRAY ", " FLOAT_ARRAY "]"), "dt"_a,
+          "The state ``dt`` seconds after the epoch, shape (6,), and the state transition matrix\n"
+          "d x(t) / d x(epoch), shape (6, 6).\n\n"
+          "The state equals ``propagate(dt)`` exactly. The matrix is in closed form and reuses its Kepler\n"
+          "solution, costing about as much again as ``propagate``, which is unaffected.")
+      .def(
+          "propagate_many_with_stm",
+          [](const tp::TwoBodyOrbit &orbit, nb::handle dts_like, nb::handle out, nb::handle stm_out) {
+            const std::vector<double> times = checked_times(dts_like);
+            auto [states, state_values] = output_array(out, {times.size(), 6});
+            auto [stms, stm_values] = output_array(stm_out, {times.size(), 6, 6});
+            require_disjoint(state_values, stm_values, "out and stm_out");
+            {
+              nb::gil_scoped_release release;
+              orbit.propagate_with_stm(times, state_values, stm_values);
+            }
+            return nb::make_tuple(states, stms);
+          },
+          nb::sig("def propagate_many_with_stm(self, dts: " ARRAY_LIKE ", out: " FLOAT_ARRAY
+                  " | None = None, stm_out: " FLOAT_ARRAY " | None = None) -> tuple[" FLOAT_ARRAY ", " FLOAT_ARRAY "]"),
+          "dts"_a, "out"_a = nb::none(), "stm_out"_a = nb::none(),
+          "The states at each of ``dts``, shape (N, 6), and their state transition matrices, shape (N, 6, 6).\n\n"
+          "Row i equals ``propagate_with_stm(dts[i])`` exactly. ``out`` and ``stm_out`` (writable,\n"
+          "C-contiguous float64 arrays of those shapes, not overlapping) are filled in place and returned\n"
+          "when given. Every dt is checked before anything is written, and the GIL is released while\n"
+          "propagating.")
       .def_prop_ro("mu", &tp::TwoBodyOrbit::mu, "Gravitational parameter.")
       .def_prop_ro("semi_major_axis", &tp::TwoBodyOrbit::semi_major_axis, "Semi-major axis a.")
       .def_prop_ro("eccentricity", &tp::TwoBodyOrbit::eccentricity, "Eccentricity e, in [0, 1).")
