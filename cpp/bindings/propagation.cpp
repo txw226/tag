@@ -20,6 +20,7 @@
 #include "tag/propagation/central_difference.hpp"
 #include "tag/propagation/elements.hpp"
 #include "tag/propagation/kepler.hpp"
+#include "tag/propagation/mean_elements.hpp"
 #include "tag/propagation/two_body.hpp"
 
 namespace nb = nanobind;
@@ -223,6 +224,34 @@ void require_elliptic_shape(double a, double e) {
   }
 }
 
+// Equinoctial elements of a validated elliptic state; only an exactly retrograde equatorial orbit
+// (i = pi) divides by zero in p and q.
+tp::Elements checked_equinoctial(const tp::State &rv, double mu) {
+  require_elliptic(rv, mu);
+  const tp::Elements eq = tp::cartesian_to_equinoctial(rv, mu);
+  if (!std::isfinite(eq[tp::eq::p]) || !std::isfinite(eq[tp::eq::q])) {
+    throw nb::value_error("equinoctial elements are singular for a retrograde equatorial orbit (i = 180 deg)");
+  }
+  return eq;
+}
+
+void require_gravity_field(double re, double j2) {
+  if (!(std::isfinite(re) && re > 0.0)) {
+    throw nb::value_error(std::format("re must be finite and positive, got {}", re).c_str());
+  }
+  if (!std::isfinite(j2)) {
+    throw nb::value_error(std::format("j2 must be finite, got {}", j2).c_str());
+  }
+}
+
+// Inclination of equinoctial elements, in degrees, for error messages.
+double inclination_deg(const tp::Elements &eq) {
+  return 2.0 * std::atan(std::hypot(eq[tp::eq::p], eq[tp::eq::q])) * 180.0 / std::numbers::pi;
+}
+
+constexpr const char *critical_inclination_note =
+    "the Brouwer-Lyddane theory is singular at the critical inclination, 63.43 deg or 116.57 deg";
+
 } // namespace
 
 NB_MODULE(_propagation, m) {
@@ -230,6 +259,8 @@ NB_MODULE(_propagation, m) {
 
   nb::exception<HyperbolicOrbitError>(m, "HyperbolicOrbitError", PyExc_ValueError);
   m.attr("EARTH_MU") = tp::earth_mu;
+  m.attr("EARTH_RE") = tp::earth_re;
+  m.attr("EARTH_J2") = tp::earth_j2;
 
   // Indices into Keplerian [a, e, i, raan, argp, anomaly] and equinoctial [a, h, k, p, q, lambda] arrays.
   m.attr("KEP_A") = tp::kep::a;
@@ -284,16 +315,7 @@ NB_MODULE(_propagation, m) {
       "invalid input.");
 
   m.def(
-      "cartesian_to_equinoctial",
-      [](const tp::State &rv, double mu) {
-        require_elliptic(rv, mu);
-        const tp::Elements eq = tp::cartesian_to_equinoctial(rv, mu);
-        // Only an exactly retrograde equatorial orbit (i = pi) divides by zero in p and q.
-        if (!std::isfinite(eq[tp::eq::p]) || !std::isfinite(eq[tp::eq::q])) {
-          throw nb::value_error("equinoctial elements are singular for a retrograde equatorial orbit (i = 180 deg)");
-        }
-        return to_numpy(eq);
-      },
+      "cartesian_to_equinoctial", [](const tp::State &rv, double mu) { return to_numpy(checked_equinoctial(rv, mu)); },
       "rv"_a, "mu"_a = tp::earth_mu,
       nb::sig("def cartesian_to_equinoctial(rv: " ARRAY_LIKE ", mu: float = EARTH_MU) -> " FLOAT_ARRAY),
       "Convert a Cartesian state [r, v] to equinoctial elements [a, h, k, p, q, lambda].\n\n"
@@ -316,6 +338,64 @@ NB_MODULE(_propagation, m) {
       "Convert equinoctial elements [a, h, k, p, q, lambda] to a Cartesian state [r, v].\n\n"
       "See cartesian_to_equinoctial for the definitions; index with the EQ_* constants. Raises\n"
       "HyperbolicOrbitError if e = sqrt(h^2 + k^2) >= 1, ValueError for invalid input.");
+
+  m.def(
+      "osculating_to_mean",
+      [](const tp::State &rv, double mu, double re, double j2) {
+        require_gravity_field(re, j2);
+        const tp::Elements osculating = checked_equinoctial(rv, mu);
+        const tp::MeanElements result = tp::osculating_to_mean_elements(osculating, re, j2);
+        if (!result.converged) {
+          throw nb::value_error(std::format("osculating to mean elements did not converge in {} iterations at "
+                                            "inclination {:.4f} deg; {}",
+                                            result.iterations, inclination_deg(osculating), critical_inclination_note)
+                                    .c_str());
+        }
+        require_elliptic_shape(result.mean[tp::eq::a], std::hypot(result.mean[tp::eq::h], result.mean[tp::eq::k]));
+        return to_numpy(result.mean);
+      },
+      "rv"_a, "mu"_a = tp::earth_mu, "re"_a = tp::earth_re, "j2"_a = tp::earth_j2,
+      nb::sig("def osculating_to_mean(rv: " ARRAY_LIKE ", mu: float = EARTH_MU, re: float = EARTH_RE, j2: float = "
+              "EARTH_J2) -> " FLOAT_ARRAY),
+      "Convert an osculating Cartesian state [r, v] to J2 mean equinoctial elements [a, h, k, p, q, lambda].\n\n"
+      "Mean elements are Brouwer-Lyddane, first order in J2: the osculating elements less the short-period\n"
+      "terms (and Brouwer's long-period terms), in Lyddane's form, so circular and equatorial orbits are\n"
+      "fine. Index the result with the EQ_* constants (see cartesian_to_equinoctial); mean lambda is in\n"
+      "[0, 2pi). There is no closed form: the inverse of mean_to_osculating is iterated to a fixed point,\n"
+      "usually in 3-5 iterations, so that mean_to_osculating gives rv back to well below a millimetre.\n\n"
+      "re is the equatorial radius (units of rv) and j2 the unnormalized zonal harmonic; defaults are Earth's.\n"
+      "The theory is singular at the critical inclination (63.43 deg, or 116.57 deg retrograde), which\n"
+      "Molniya orbits sit at: nearby, the corrections are large and unreliable, and when the iteration\n"
+      "fails to converge it raises ValueError naming the inclination rather than return garbage.\n"
+      "Raises HyperbolicOrbitError if e >= 1, ValueError for invalid input or a retrograde equatorial orbit.");
+
+  m.def(
+      "mean_to_osculating",
+      [](const tp::Elements &mean, double mu, double re, double j2) {
+        require_positive_mu(mu);
+        require_gravity_field(re, j2);
+        require_finite(mean, "elements");
+        require_elliptic_shape(mean[tp::eq::a], std::hypot(mean[tp::eq::h], mean[tp::eq::k]));
+        const tp::Elements osculating = tp::mean_to_osculating_elements(mean, re, j2);
+        for (const double x : osculating) {
+          if (!std::isfinite(x)) {
+            throw nb::value_error(std::format("osculating elements are not finite at mean inclination {:.4f} deg; {}",
+                                              inclination_deg(mean), critical_inclination_note)
+                                      .c_str());
+          }
+        }
+        require_elliptic_shape(osculating[tp::eq::a], std::hypot(osculating[tp::eq::h], osculating[tp::eq::k]));
+        return to_numpy(tp::equinoctial_to_cartesian(osculating, mu));
+      },
+      "elements"_a, "mu"_a = tp::earth_mu, "re"_a = tp::earth_re, "j2"_a = tp::earth_j2,
+      nb::sig("def mean_to_osculating(elements: " ARRAY_LIKE ", mu: float = EARTH_MU, re: float = EARTH_RE, j2: "
+              "float = EARTH_J2) -> " FLOAT_ARRAY),
+      "Convert J2 mean equinoctial elements [a, h, k, p, q, lambda] to an osculating Cartesian state [r, v].\n\n"
+      "The inverse of osculating_to_mean, in closed form: the mean elements plus the first-order\n"
+      "Brouwer-Lyddane short-period and long-period terms. Accuracy is first order: errors are O(J2^2).\n"
+      "The theory is singular at the critical inclination (63.43 deg, or 116.57 deg retrograde): nearby,\n"
+      "the corrections are large and unreliable; exactly there they are infinite, which raises ValueError.\n"
+      "Raises HyperbolicOrbitError if the mean or osculating e >= 1, ValueError for invalid input.");
 
   m.def(
       "eccentric_anomaly",
