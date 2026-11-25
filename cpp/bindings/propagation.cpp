@@ -1,10 +1,14 @@
 // The only translation unit that includes nanobind: adapts Python arguments to the C++ core.
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <format>
 #include <numbers>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -79,6 +83,91 @@ void require_finite_time(double dt) {
   if (!std::isfinite(dt)) {
     throw nb::value_error(std::format("dt must be finite, got {}", dt).c_str());
   }
+}
+
+// A batched input as a C-contiguous float64 array. Shapes are checked by hand for clearer errors
+// than nanobind's.
+using ConvertedInput = nb::ndarray<const double, nb::c_contig, nb::device::cpu>;
+// A caller's out buffer: written in place, so never converted.
+using OutputBuffer = nb::ndarray<nb::numpy, double, nb::c_contig, nb::device::cpu>;
+
+std::string shape_string(std::span<const std::size_t> shape) {
+  std::string s = "(";
+  for (std::size_t d = 0; d < shape.size(); ++d) {
+    s += std::format("{}{}", d ? ", " : "", shape[d]);
+  }
+  return s + (shape.size() == 1 ? ",)" : ")");
+}
+
+std::string array_shape_string(const auto &array) {
+  std::vector<std::size_t> shape(array.ndim());
+  for (std::size_t d = 0; d < shape.size(); ++d) {
+    shape[d] = array.shape(d);
+  }
+  return shape_string(shape);
+}
+
+// Any real numeric array-like (lists, scalars, integer dtypes, any layout), converted by numpy
+// unless it already is a C-contiguous float64 array; other dtypes (bool, complex, str, object)
+// raise TypeError rather than being coerced. The result keeps the converted array alive.
+ConvertedInput as_doubles(nb::handle x, const char *name) {
+  ConvertedInput array;
+  if (nb::try_cast(x, array, false)) {
+    return array;
+  }
+  const nb::module_ numpy = nb::module_::import_("numpy");
+  nb::object converted = numpy.attr("asarray")(x);
+  const auto kind = nb::cast<std::string>(converted.attr("dtype").attr("kind"));
+  if (kind != "f" && kind != "i" && kind != "u") {
+    const auto dtype = nb::cast<std::string>(converted.attr("dtype").attr("name"));
+    throw nb::type_error(std::format("{} must be real numbers, got dtype {}", name, dtype).c_str());
+  }
+  converted = numpy.attr("ascontiguousarray")(converted, "dtype"_a = "float64");
+  return nb::cast<ConvertedInput>(converted, false);
+}
+
+// The validated times, as an owned copy: the loop runs without the GIL and may write into memory
+// the caller's dts shares (out could alias it), so it must not read the caller's array.
+std::vector<double> checked_times(nb::handle dts_like) {
+  const ConvertedInput dts = as_doubles(dts_like, "dts");
+  if (dts.ndim() != 1) {
+    throw nb::value_error(std::format("dts must be 1-D, got shape {}", array_shape_string(dts)).c_str());
+  }
+  std::vector<double> times(dts.data(), dts.data() + dts.shape(0));
+  for (std::size_t i = 0; i < times.size(); ++i) {
+    if (!std::isfinite(times[i])) {
+      throw nb::value_error(std::format("dts[{}] must be finite, got {}", i, times[i]).c_str());
+    }
+  }
+  return times;
+}
+
+// The output array and its elements: out itself when given (checked, never copied), else a new
+// array of the given shape. Allocates before any computation, so the loop doesn't.
+std::pair<nb::object, std::span<double>> output_array(nb::handle out, std::initializer_list<std::size_t> shape) {
+  std::size_t size = 1;
+  for (const std::size_t n : shape) {
+    size *= n;
+  }
+  if (out.is_none()) {
+    auto *data = new double[size];
+    nb::capsule owner(data, [](void *p) noexcept { delete[] static_cast<double *>(p); });
+    return {nb::cast(OutputBuffer(data, shape.size(), shape.begin(), owner)), {data, size}};
+  }
+  OutputBuffer array;
+  if (!nb::try_cast(out, array, false)) {
+    throw nb::type_error("out must be a writable, C-contiguous numpy array of dtype float64");
+  }
+  bool match = array.ndim() == shape.size();
+  for (std::size_t d = 0; match && d < shape.size(); ++d) {
+    match = array.shape(d) == shape.begin()[d];
+  }
+  if (!match) {
+    throw nb::value_error(std::format("out must have shape {}, got {}", shape_string({shape.begin(), shape.size()}),
+                                      array_shape_string(array))
+                              .c_str());
+  }
+  return {nb::borrow(out), {array.data(), size}};
 }
 
 tp::Anomaly parse_anomaly(const std::string &anomaly) {
@@ -225,6 +314,44 @@ NB_MODULE(_propagation, m) {
       "Solve Kepler's equation E - e sin E = M for the eccentric anomaly E (radians).\n\n"
       "E is in the same revolution as M. Raises ValueError unless 0 <= e < 1 and M is finite.");
 
+  m.def(
+      "propagate_many",
+      [](nb::handle rvs_like, nb::handle dts_like, double mu, nb::handle out) {
+        const ConvertedInput rvs = as_doubles(rvs_like, "rvs");
+        if (rvs.ndim() != 2 || rvs.shape(1) != 6) {
+          throw nb::value_error(std::format("rvs must have shape (M, 6), got {}", array_shape_string(rvs)).c_str());
+        }
+        require_positive_mu(mu);
+        const std::vector<double> times = checked_times(dts_like);
+        // Validate and build every orbit before writing anything.
+        std::vector<tp::TwoBodyOrbit> orbits;
+        orbits.reserve(rvs.shape(0));
+        for (std::size_t i = 0; i < rvs.shape(0); ++i) {
+          tp::State rv;
+          std::copy_n(rvs.data() + 6 * i, 6, rv.begin());
+          try {
+            require_elliptic(rv, mu);
+          } catch (const HyperbolicOrbitError &err) {
+            throw HyperbolicOrbitError(std::format("rvs[{}]: {}", i, err.what()));
+          } catch (const nb::builtin_exception &err) {
+            throw nb::value_error(std::format("rvs[{}]: {}", i, err.what()).c_str());
+          }
+          orbits.emplace_back(rv, mu);
+        }
+        auto [result, states] = output_array(out, {orbits.size(), times.size(), 6});
+        nb::gil_scoped_release release;
+        tp::propagate_grid(orbits, times, states);
+        return result;
+      },
+      "rvs"_a, "dts"_a, "mu"_a = tp::earth_mu, "out"_a = nb::none(),
+      nb::sig("def propagate_many(rvs: " ARRAY_LIKE ", dts: " ARRAY_LIKE ", mu: float = EARTH_MU, out: " FLOAT_ARRAY
+              " | None = None) -> " FLOAT_ARRAY),
+      "Propagate many orbits to many times: shape (M, N, 6) for rvs (M, 6) and dts (N,).\n\n"
+      "``out[m, j]`` equals ``TwoBodyOrbit(rvs[m], mu).propagate(dts[j])`` exactly. Pass ``out`` (a\n"
+      "writable, C-contiguous float64 array of shape (M, N, 6)) to fill it in place; it is returned.\n"
+      "Every state and time is validated before anything is written (HyperbolicOrbitError or\n"
+      "ValueError, naming the bad row or time), and the GIL is released while propagating.");
+
   nb::class_<tp::TwoBodyOrbit>(
       m, "TwoBodyOrbit",
       "Two-body propagation of an elliptic orbit from an osculating Cartesian state.\n\n"
@@ -249,6 +376,21 @@ NB_MODULE(_propagation, m) {
           nb::sig("def propagate(self, dt: float) -> " FLOAT_ARRAY), "dt"_a,
           "The Cartesian state ``dt`` seconds (any sign) after the epoch, as a float64 array of shape (6,).\n\n"
           "Precision doesn't decay with long ``dt``: the mean anomaly is reduced modulo 2 pi.")
+      .def(
+          "propagate_many",
+          [](const tp::TwoBodyOrbit &orbit, nb::handle dts_like, nb::handle out) {
+            const std::vector<double> times = checked_times(dts_like);
+            auto [result, states] = output_array(out, {times.size(), 6});
+            nb::gil_scoped_release release;
+            orbit.propagate(times, states);
+            return result;
+          },
+          nb::sig("def propagate_many(self, dts: " ARRAY_LIKE ", out: " FLOAT_ARRAY " | None = None) -> " FLOAT_ARRAY),
+          "dts"_a, "out"_a = nb::none(),
+          "The Cartesian states at each of ``dts`` (a 1-D array of times after the epoch), shape (N, 6).\n\n"
+          "Row i equals ``propagate(dts[i])`` exactly. Pass ``out`` (a writable, C-contiguous float64 array\n"
+          "of shape (N, 6)) to fill it in place; it is returned. Every dt is checked before anything is\n"
+          "written, and the GIL is released while propagating.")
       .def_prop_ro("mu", &tp::TwoBodyOrbit::mu, "Gravitational parameter.")
       .def_prop_ro("semi_major_axis", &tp::TwoBodyOrbit::semi_major_axis, "Semi-major axis a.")
       .def_prop_ro("eccentricity", &tp::TwoBodyOrbit::eccentricity, "Eccentricity e, in [0, 1).")

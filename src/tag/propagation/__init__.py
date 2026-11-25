@@ -27,6 +27,7 @@ from tag.propagation._propagation import (
     eccentric_anomaly,
     equinoctial_to_cartesian,
     keplerian_to_cartesian,
+    propagate_many,
 )
 
 # The anomaly kinds the Keplerian converters accept.
@@ -54,4 +55,5 @@ __all__ = [
     "eccentric_anomaly",
     "equinoctial_to_cartesian",
     "keplerian_to_cartesian",
+    "propagate_many",
 ]

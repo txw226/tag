@@ -1,6 +1,8 @@
 #include "tag/propagation/two_body.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 
 #include "tag/propagation/kepler.hpp"
 
@@ -41,6 +43,20 @@ State TwoBodyOrbit::propagate(double dt) const noexcept {
   const double vy = rate * k.cos_E;
   return {A_[0] * x + B_[0] * y,   A_[1] * x + B_[1] * y,   A_[2] * x + B_[2] * y,
           A_[0] * vx + B_[0] * vy, A_[1] * vx + B_[1] * vy, A_[2] * vx + B_[2] * vy};
+}
+
+void TwoBodyOrbit::propagate(std::span<const double> dts, std::span<double> out) const noexcept {
+  for (std::size_t i = 0; i < dts.size(); ++i) {
+    const State rv = propagate(dts[i]);
+    std::copy(rv.begin(), rv.end(), out.begin() + static_cast<std::ptrdiff_t>(6 * i));
+  }
+}
+
+void propagate_grid(std::span<const TwoBodyOrbit> orbits, std::span<const double> dts, std::span<double> out) noexcept {
+  const std::size_t stride = 6 * dts.size();
+  for (std::size_t m = 0; m < orbits.size(); ++m) {
+    orbits[m].propagate(dts, out.subspan(m * stride, stride));
+  }
 }
 
 } // namespace tag::propagation
