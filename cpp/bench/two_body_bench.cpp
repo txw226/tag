@@ -45,6 +45,18 @@ void bench_two_body() {
   }
 }
 
+void bench_two_body_stm() {
+  // The scalar calls with the state transition matrix: its cost on top of propagate.
+  const std::vector<double> dts = random_times();
+  ankerl::nanobench::Bench with_stm;
+  with_stm.title("Two-body propagate_with_stm").unit("call").warmup(10000).minEpochIterations(100000).relative(true);
+  for (const Case &c : cases) {
+    const tag::propagation::TwoBodyOrbit orbit(c.rv, tag::propagation::earth_mu);
+    std::size_t i = 0;
+    with_stm.run(c.name, [&] { ankerl::nanobench::doNotOptimizeAway(orbit.propagate_with_stm(dts[i++ % n])); });
+  }
+}
+
 void bench_two_body_batched() {
   const std::vector<double> dts = random_times();
 

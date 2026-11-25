@@ -106,6 +106,17 @@ def propagate_many(
     ValueError, naming the bad row or time), and the GIL is released while propagating.
     """
 
+def _two_body_central_difference_stm(
+    rv: numpy.typing.ArrayLike, dt: float, mu: float = EARTH_MU
+) -> numpy.typing.NDArray[numpy.float64]:
+    """
+    Internal test oracle: the two-body state transition matrix by central differences in C++.
+
+    Not public API (not exported from tag.propagation); tests compare analytic state transition
+    matrices against it. Entries are good to about 1e-10 of the largest at low e, 1e-7 at e = 0.9
+    and only about 1e-5 at e = 0.99.
+    """
+
 class TwoBodyOrbit:
     """
     Two-body propagation of an elliptic orbit from an osculating Cartesian state.
@@ -133,6 +144,32 @@ class TwoBodyOrbit:
         Row i equals ``propagate(dts[i])`` exactly. Pass ``out`` (a writable, C-contiguous float64 array
         of shape (N, 6)) to fill it in place; it is returned. Every dt is checked before anything is
         written, and the GIL is released while propagating.
+        """
+
+    def propagate_with_stm(
+        self, dt: float
+    ) -> tuple[numpy.typing.NDArray[numpy.float64], numpy.typing.NDArray[numpy.float64]]:
+        """
+        The state ``dt`` seconds after the epoch, shape (6,), and the state transition matrix
+        d x(t) / d x(epoch), shape (6, 6).
+
+        The state equals ``propagate(dt)`` exactly. The matrix is in closed form and reuses its Kepler
+        solution, costing about as much again as ``propagate``, which is unaffected.
+        """
+
+    def propagate_many_with_stm(
+        self,
+        dts: numpy.typing.ArrayLike,
+        out: numpy.typing.NDArray[numpy.float64] | None = None,
+        stm_out: numpy.typing.NDArray[numpy.float64] | None = None,
+    ) -> tuple[numpy.typing.NDArray[numpy.float64], numpy.typing.NDArray[numpy.float64]]:
+        """
+        The states at each of ``dts``, shape (N, 6), and their state transition matrices, shape (N, 6, 6).
+
+        Row i equals ``propagate_with_stm(dts[i])`` exactly. ``out`` and ``stm_out`` (writable,
+        C-contiguous float64 arrays of those shapes, not overlapping) are filled in place and returned
+        when given. Every dt is checked before anything is written, and the GIL is released while
+        propagating.
         """
 
     @property
