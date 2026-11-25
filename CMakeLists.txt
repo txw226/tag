@@ -20,7 +20,7 @@ target_compile_options(tag_flags INTERFACE -fno-math-errno $<$<BOOL:${TAG_NATIVE
 
 # The C++ core: plain C++ types only, no Python.
 add_library(tag_core STATIC cpp/src/propagation/kepler.cpp cpp/src/propagation/two_body.cpp
-                            cpp/src/propagation/elements.cpp)
+                            cpp/src/propagation/elements.cpp cpp/src/propagation/central_difference.cpp)
 target_include_directories(tag_core PUBLIC cpp/include)
 target_link_libraries(tag_core PUBLIC tag_flags)
 set_target_properties(tag_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

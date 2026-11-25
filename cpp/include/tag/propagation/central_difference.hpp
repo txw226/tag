@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstddef>
+#include <functional>
 
 #include "tag/propagation/cartesian.hpp"
 
@@ -15,23 +15,7 @@ namespace tag::propagation {
 // swept and, near a high-e perigee, the eccentricity: the two-body oracle binding scales cbrt(eps)
 // down by both. Precondition: every state propagate_from is given stays inside the
 // propagation's domain (unchecked).
-template <class Propagate>
-[[nodiscard]] Matrix6 central_difference_stm(const State &x0, Propagate &&propagate_from, double relative_step) {
-  const double steps[2] = {relative_step * norm(position(x0)), relative_step * norm(velocity(x0))};
-  Matrix6 stm{};
-  for (std::size_t j = 0; j < 6; ++j) {
-    State plus = x0;
-    State minus = x0;
-    plus[j] += steps[j / 3];
-    minus[j] -= steps[j / 3];
-    const State y_plus = propagate_from(plus);
-    const State y_minus = propagate_from(minus);
-    const double step = plus[j] - minus[j];
-    for (std::size_t i = 0; i < 6; ++i) {
-      stm[6 * i + j] = (y_plus[i] - y_minus[i]) / step;
-    }
-  }
-  return stm;
-}
+[[nodiscard]] Matrix6 central_difference_stm(const State &x0, const std::function<State(const State &)> &propagate_from,
+                                             double relative_step);
 
 } // namespace tag::propagation
