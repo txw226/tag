@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include "tag/propagation/cartesian.hpp"
 
 namespace tag::propagation {
@@ -23,6 +25,10 @@ public:
   // rounding and reduced modulo 2*pi, so precision doesn't decay with |dt|.
   [[nodiscard]] State propagate(double dt) const noexcept;
 
+  // Batched propagate: writes propagate(dts[i]) to out[6 i .. 6 i + 5], with no allocation.
+  // Precondition: out.size() == 6 * dts.size() and every dt finite.
+  void propagate(std::span<const double> dts, std::span<double> out) const noexcept;
+
   [[nodiscard]] double mu() const noexcept { return mu_; }
   [[nodiscard]] double semi_major_axis() const noexcept { return a_; }
   [[nodiscard]] double eccentricity() const noexcept { return e_; }
@@ -37,5 +43,10 @@ private:
   Vec3 A_;    // a P
   Vec3 B_;    // b Q
 };
+
+// Propagates every orbit to every time: writes orbits[m].propagate(dts[j]) to
+// out[6 (m N + j) .. 6 (m N + j) + 5], N = dts.size(), with no allocation.
+// Precondition: out.size() == 6 * orbits.size() * dts.size() and every dt finite.
+void propagate_grid(std::span<const TwoBodyOrbit> orbits, std::span<const double> dts, std::span<double> out) noexcept;
 
 } // namespace tag::propagation

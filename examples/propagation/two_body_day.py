@@ -3,7 +3,8 @@
 A near-circular LEO, an eccentric Molniya-like orbit and GEO, each built as a TwoBodyOrbit from a
 Cartesian state at the epoch and propagated to every 30 s over a day. The figure shows the orbits in
 3D around the Earth, altitude against time, and how well specific energy and angular momentum are
-conserved (relative error, against the epoch values). It also prints the cost of one Python call.
+conserved (relative error, against the epoch values). It also prints the cost of one scalar Python
+call and, per point, of one batched call over the day.
 
 Run:  uv run python examples/propagation/two_body_day.py [--no-show]
 Writes examples/propagation/out/two_body_day.html.
@@ -73,15 +74,19 @@ def main() -> None:
 
     for name, (rv0, color) in ORBITS.items():
         orbit = TwoBodyOrbit(rv0)
-        states = np.array([orbit.propagate(t) for t in times])
+        states = orbit.propagate_many(times)
         e_err = energy(states) / energy(np.array(rv0)) - 1
         h0 = np.linalg.norm(angular_momentum(np.array(rv0)))
         h_err = np.linalg.norm(angular_momentum(states), axis=1) / h0 - 1
         per_call = min(timeit.repeat(partial(orbit.propagate, 1234.5), number=100_000, repeat=5)) / 100_000
+        buffer = np.empty_like(states)
+        batched = min(timeit.repeat(partial(orbit.propagate_many, times, out=buffer), number=200, repeat=5)) / 200
+        per_point = batched / len(times)
         print(
             f"{name:24s} a = {orbit.semi_major_axis:9.1f} km  e = {orbit.eccentricity:.4f}  "
             f"period = {orbit.period / 3600:5.2f} h  max |energy err| = {np.abs(e_err).max():.1e}  "
-            f"max |h err| = {np.abs(h_err).max():.1e}  propagate: {per_call * 1e9:.0f} ns/call"
+            f"max |h err| = {np.abs(h_err).max():.1e}  propagate: {per_call * 1e9:.0f} ns/call  "
+            f"propagate_many: {per_point * 1e9:.0f} ns/point"
         )
 
         line = {"color": color, "width": 2}

@@ -91,6 +91,21 @@ def eccentric_anomaly(mean_anomaly: float, e: float) -> float:
     E is in the same revolution as M. Raises ValueError unless 0 <= e < 1 and M is finite.
     """
 
+def propagate_many(
+    rvs: numpy.typing.ArrayLike,
+    dts: numpy.typing.ArrayLike,
+    mu: float = EARTH_MU,
+    out: numpy.typing.NDArray[numpy.float64] | None = None,
+) -> numpy.typing.NDArray[numpy.float64]:
+    """
+    Propagate many orbits to many times: shape (M, N, 6) for rvs (M, 6) and dts (N,).
+
+    ``out[m, j]`` equals ``TwoBodyOrbit(rvs[m], mu).propagate(dts[j])`` exactly. Pass ``out`` (a
+    writable, C-contiguous float64 array of shape (M, N, 6)) to fill it in place; it is returned.
+    Every state and time is validated before anything is written (HyperbolicOrbitError or
+    ValueError, naming the bad row or time), and the GIL is released while propagating.
+    """
+
 class TwoBodyOrbit:
     """
     Two-body propagation of an elliptic orbit from an osculating Cartesian state.
@@ -107,6 +122,17 @@ class TwoBodyOrbit:
         The Cartesian state ``dt`` seconds (any sign) after the epoch, as a float64 array of shape (6,).
 
         Precision doesn't decay with long ``dt``: the mean anomaly is reduced modulo 2 pi.
+        """
+
+    def propagate_many(
+        self, dts: numpy.typing.ArrayLike, out: numpy.typing.NDArray[numpy.float64] | None = None
+    ) -> numpy.typing.NDArray[numpy.float64]:
+        """
+        The Cartesian states at each of ``dts`` (a 1-D array of times after the epoch), shape (N, 6).
+
+        Row i equals ``propagate(dts[i])`` exactly. Pass ``out`` (a writable, C-contiguous float64 array
+        of shape (N, 6)) to fill it in place; it is returned. Every dt is checked before anything is
+        written, and the GIL is released while propagating.
         """
 
     @property
