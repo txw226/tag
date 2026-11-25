@@ -9,6 +9,10 @@ class HyperbolicOrbitError(ValueError): ...
 
 EARTH_MU: float = 398600.4418
 
+EARTH_RE: float = 6378.137
+
+EARTH_J2: float = 0.00108262668
+
 KEP_A: int = 0
 
 KEP_E: int = 1
@@ -82,6 +86,38 @@ def equinoctial_to_cartesian(
 
     See cartesian_to_equinoctial for the definitions; index with the EQ_* constants. Raises
     HyperbolicOrbitError if e = sqrt(h^2 + k^2) >= 1, ValueError for invalid input.
+    """
+
+def osculating_to_mean(
+    rv: numpy.typing.ArrayLike, mu: float = EARTH_MU, re: float = EARTH_RE, j2: float = EARTH_J2
+) -> numpy.typing.NDArray[numpy.float64]:
+    """
+    Convert an osculating Cartesian state [r, v] to J2 mean equinoctial elements [a, h, k, p, q, lambda].
+
+    Mean elements are Brouwer-Lyddane, first order in J2: the osculating elements less the short-period
+    terms (and Brouwer's long-period terms), in Lyddane's form, so circular and equatorial orbits are
+    fine. Index the result with the EQ_* constants (see cartesian_to_equinoctial); mean lambda is in
+    [0, 2pi). There is no closed form: the inverse of mean_to_osculating is iterated to a fixed point,
+    usually in 3-5 iterations, so that mean_to_osculating gives rv back to well below a millimetre.
+
+    re is the equatorial radius (units of rv) and j2 the unnormalized zonal harmonic; defaults are Earth's.
+    The theory is singular at the critical inclination (63.43 deg, or 116.57 deg retrograde), which
+    Molniya orbits sit at: nearby, the corrections are large and unreliable, and when the iteration
+    fails to converge it raises ValueError naming the inclination rather than return garbage.
+    Raises HyperbolicOrbitError if e >= 1, ValueError for invalid input or a retrograde equatorial orbit.
+    """
+
+def mean_to_osculating(
+    elements: numpy.typing.ArrayLike, mu: float = EARTH_MU, re: float = EARTH_RE, j2: float = EARTH_J2
+) -> numpy.typing.NDArray[numpy.float64]:
+    """
+    Convert J2 mean equinoctial elements [a, h, k, p, q, lambda] to an osculating Cartesian state [r, v].
+
+    The inverse of osculating_to_mean, in closed form: the mean elements plus the first-order
+    Brouwer-Lyddane short-period and long-period terms. Accuracy is first order: errors are O(J2^2).
+    The theory is singular at the critical inclination (63.43 deg, or 116.57 deg retrograde): nearby,
+    the corrections are large and unreliable; exactly there they are infinite, which raises ValueError.
+    Raises HyperbolicOrbitError if the mean or osculating e >= 1, ValueError for invalid input.
     """
 
 def eccentric_anomaly(mean_anomaly: float, e: float) -> float:

@@ -7,7 +7,9 @@ so states are then in km and km/s and times in seconds.
 from typing import Literal
 
 from tag.propagation._propagation import (
+    EARTH_J2,
     EARTH_MU,
+    EARTH_RE,
     EQ_A,
     EQ_H,
     EQ_K,
@@ -27,6 +29,8 @@ from tag.propagation._propagation import (
     eccentric_anomaly,
     equinoctial_to_cartesian,
     keplerian_to_cartesian,
+    mean_to_osculating,
+    osculating_to_mean,
     propagate_many,
 )
 
@@ -34,7 +38,9 @@ from tag.propagation._propagation import (
 type AnomalyKind = Literal["mean", "true", "eccentric"]
 
 __all__ = [
+    "EARTH_J2",
     "EARTH_MU",
+    "EARTH_RE",
     "EQ_A",
     "EQ_H",
     "EQ_K",
@@ -55,5 +61,7 @@ __all__ = [
     "eccentric_anomaly",
     "equinoctial_to_cartesian",
     "keplerian_to_cartesian",
+    "mean_to_osculating",
+    "osculating_to_mean",
     "propagate_many",
 ]
