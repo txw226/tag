@@ -85,6 +85,14 @@ Elements mean_to_osculating_elements(const Elements &mean, double re, double j2)
   const double s_terms = 3.0 * sin_2w_2f + 3.0 * e * sin_2w_f + e * sin_2w_3f;
   const double c_terms = 3.0 * cos_2w_2f + 3.0 * e * cos_2w_f + e * cos_2w_3f;
 
+  // Brouwer's delta l and delta g share the bracket X / e, with factors -eta^3 and +eta^2. In e delta M it
+  // keeps -eta^3; in delta lambda = delta l + delta g + delta h the two leave eta^2 (1 - eta) / e =
+  // eta^2 e / (1 + eta), regular at e = 0. (Dropping that O(e) term leaves mean lambda and varpi with a
+  // once-per-revolution wobble: tests/propagation/test_mean_elements.py checks the angles' steadiness.)
+  const double ar_eta2 = a_r * a_r * eta2;
+  const double X = 2.0 * (3.0 * c2 - 1.0) * (ar_eta2 + a_r + 1.0) * sin_f +
+                   3.0 * s2 * ((-ar_eta2 - a_r + 1.0) * sin_2w_f + (ar_eta2 + a_r + 1.0 / 3.0) * sin_2w_3f);
+
   const double da = a * gamma2 * ((3.0 * c2 - 1.0) * (a_r3 - 1.0 / eta3) + 3.0 * s2 * a_r3 * cos_2w_2f);
 
   const double de1 = gp / 8.0 * e * eta2 * lp * cos_2w;
@@ -105,13 +113,10 @@ Elements mean_to_osculating_elements(const Elements &mean, double re, double j2)
                              (2.0 + e * e - 11.0 * (2.0 + 3.0 * e * e) * c2 -
                               40.0 * (2.0 + 5.0 * e * e) * c2 * c2 / den - 400.0 * e * e * c2 * c2 * c2 / (den * den)) *
                              sin_2w +
-                         gp / 4.0 * (-6.0 * den * centre + (3.0 - 5.0 * c2) * s_terms) + draan;
+                         gp / 4.0 * (-6.0 * den * centre + (3.0 - 5.0 * c2) * s_terms) +
+                         gp / 4.0 * eta2 * e / (1.0 + eta) * X + draan;
 
-  const double ar_eta2 = a_r * a_r * eta2;
-  const double edM = gp / 8.0 * e * eta3 * lp * sin_2w -
-                     gp / 4.0 * eta3 *
-                         (2.0 * (3.0 * c2 - 1.0) * (ar_eta2 + a_r + 1.0) * sin_f +
-                          3.0 * s2 * ((-ar_eta2 - a_r + 1.0) * sin_2w_f + (ar_eta2 + a_r + 1.0 / 3.0) * sin_2w_3f));
+  const double edM = gp / 8.0 * e * eta3 * lp * sin_2w - gp / 4.0 * eta3 * X;
 
   // Lyddane: perturb (e cos M, e sin M) and sin(i/2) (cos raan, sin raan), then read off the
   // equinoctial elements, with varpi' = lambda' - M'.

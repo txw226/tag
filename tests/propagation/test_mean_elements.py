@@ -11,6 +11,7 @@ from tag.propagation import (
     EQ_A,
     EQ_H,
     EQ_K,
+    EQ_LAMBDA,
     EQ_P,
     EQ_Q,
     HyperbolicOrbitError,
@@ -151,3 +152,33 @@ def test_invalid_input_raises() -> None:
         mean_to_osculating([-7000.0, 0, 0, 0, 0, 0])
     with pytest.raises(ValueError, match="elements must be finite"):
         mean_to_osculating([7000.0, 0, 0, 0, 0, math.inf])
+
+
+def angle_wobbles(elements: NDArray[np.float64], t: NDArray[np.float64], e: float, i: float) -> NDArray[np.float64]:
+    """Peak-to-peak of lambda, varpi and raan about their best-fit line in t (the secular drift), over a series
+    of equinoctial elements. varpi is NaN for near-circular orbits and raan for near-equatorial ones, where
+    those angles are undefined."""
+    lam = np.unwrap(elements[:, EQ_LAMBDA])
+    varpi = np.unwrap(np.arctan2(elements[:, EQ_H], elements[:, EQ_K]))
+    raan = np.unwrap(np.arctan2(elements[:, EQ_P], elements[:, EQ_Q]))
+    out = []
+    for angle, defined in ((lam, True), (varpi, e >= 0.01), (raan, i >= 1 * DEG)):
+        out.append(np.ptp(angle - np.polyval(np.polyfit(t, angle, 1), t)) if defined else np.nan)
+    return np.array(out)
+
+
+@pytest.mark.parametrize("name", REGIMES)
+def test_mean_angles_remove_the_short_period_terms_of_a_true_j2_orbit(name: str) -> None:
+    # The same check for the angles: about their secular drift, mean lambda, varpi and raan hold steady along
+    # one revolution of the true J2 orbit, while the osculating ones swing by the short-period terms. Sweep:
+    # at least 34 times steadier (GEO, whose osculating swings are ~1e-8 rad), typically several hundred.
+    # This caught a missing O(e) term in delta lambda, which left lambda and varpi only ~6 times steadier
+    # at e = 0.2 and in GTO.
+    a, e, i = REGIMES[name][:3]
+    period = 2 * math.pi * math.sqrt(a**3 / EARTH_MU)
+    t = np.linspace(0, period, 401)
+    truth = j2_trajectory(state(name), period / 400, 400)
+    osculating = angle_wobbles(np.array([cartesian_to_equinoctial(rv) for rv in truth]), t, e, i)
+    mean = angle_wobbles(np.array([osculating_to_mean(rv) for rv in truth]), t, e, i)
+    defined = ~np.isnan(mean)
+    assert np.all(mean[defined] <= osculating[defined] / 25), (mean, osculating)
