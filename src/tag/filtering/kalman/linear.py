@@ -10,7 +10,14 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from tag.filtering.kalman._base import FilterResult, KalmanFilterBase, _as_matrix, joseph_update
+from tag.filtering.kalman._base import (
+    AcceptPosterior,
+    FilterResult,
+    KalmanFilterBase,
+    UpdateOutcome,
+    _as_matrix,
+    joseph_update,
+)
 
 __all__ = ["FilterResult", "LinearKalmanFilter"]
 
@@ -26,6 +33,9 @@ class LinearKalmanFilter(KalmanFilterBase):
         x0: (n,) initial state estimate.
         P0: (n, n) initial state covariance.
         B: optional (n, p) control input matrix.
+        accept_posterior: optional ``accept_posterior(x, P) -> bool``; False makes the update a
+            rejected update (the prior is kept). See :class:`KalmanFilterBase`.
+        max_consecutive_unabsorbed: optional lock-out limit; ``None`` (default) only reports.
     """
 
     def __init__(
@@ -37,6 +47,8 @@ class LinearKalmanFilter(KalmanFilterBase):
         x0: ArrayLike,
         P0: ArrayLike,
         B: ArrayLike | None = None,
+        accept_posterior: AcceptPosterior | None = None,
+        max_consecutive_unabsorbed: int | None = None,
     ) -> None:
         F = np.atleast_2d(np.array(F, dtype=float))
         if F.ndim != 2 or F.shape[0] != F.shape[1]:
@@ -70,6 +82,7 @@ class LinearKalmanFilter(KalmanFilterBase):
             self.B = B
 
         self.n, self.m = n, m
+        self._init_acceptance(accept_posterior, max_consecutive_unabsorbed)
 
         # Diagnostics from the most recent update.
         self.y: NDArray | None = None  # innovation
@@ -88,14 +101,18 @@ class LinearKalmanFilter(KalmanFilterBase):
             self.x = self.x + self.B @ u
         self.P = self.F @ self.P @ self.F.T + self.Q
 
-    def update(self, z: ArrayLike | None) -> None:
-        """Correct the state with measurement z. ``None`` skips the update."""
+    def update(self, z: ArrayLike | None) -> UpdateOutcome:
+        """Correct the state with measurement z. ``None`` skips the update.
+
+        The diagnostics ``y``, ``S`` and ``K`` are kept even for a rejected update.
+        """
         if z is None:
-            return
+            return UpdateOutcome.SKIPPED
         z = np.asarray(z, dtype=float).reshape(-1)
         if z.shape != (self.m,):
             raise ValueError(f"z must have shape ({self.m},), got {z.shape}")
 
         y = z - self.H @ self.x
-        self.x, self.P, self.S, self.K = joseph_update(self.x, self.P, y, self.H, self.R)
+        x, P, self.S, self.K = joseph_update(self.x, self.P, y, self.H, self.R)
         self.y = y
+        return self._accept(x, P)

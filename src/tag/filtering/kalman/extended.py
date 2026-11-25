@@ -23,8 +23,10 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from tag.filtering.kalman._base import (
+    AcceptPosterior,
     FilterResult,
     KalmanFilterBase,
+    UpdateOutcome,
     _as_matrix,
     _controls,
     joseph_update,
@@ -78,6 +80,10 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         residual: optional ``residual(z, z_pred) -> y``, e.g. to wrap angles.
             Defaults to ``z - z_pred``.
         eps: relative finite-difference step for numerical Jacobians.
+        accept_posterior: optional ``accept_posterior(x, P) -> bool``; False makes the update a
+            rejected update (the prior is kept). Checked per sensor in ``filter_sensors``.
+            See :class:`KalmanFilterBase`.
+        max_consecutive_unabsorbed: optional lock-out limit; ``None`` (default) only reports.
     """
 
     def __init__(
@@ -92,6 +98,8 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         H_jac: Callable[[NDArray], ArrayLike] | None = None,
         residual: ResidualFn | None = None,
         eps: float = 1e-6,
+        accept_posterior: AcceptPosterior | None = None,
+        max_consecutive_unabsorbed: int | None = None,
     ) -> None:
         x0 = np.array(x0, dtype=float).reshape(-1)
         n = x0.size
@@ -112,6 +120,7 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         self.x = x0
         self.n = n
         self.m = None if R is None else R.shape[0]
+        self._init_acceptance(accept_posterior, max_consecutive_unabsorbed)
 
         # Diagnostics from the most recent predict / update.
         self.F: NDArray | None = None  # transition Jacobian
@@ -146,14 +155,15 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         self.P = F @ self.P @ F.T + self.Q
         self.F = F
 
-    def update(self, z: ArrayLike | None, sensor: MeasurementModel | None = None) -> None:
+    def update(self, z: ArrayLike | None, sensor: MeasurementModel | None = None) -> UpdateOutcome:
         """Correct the state with measurement z. ``None`` skips the update.
 
         With ``sensor``, its ``h``, ``H_jac``, ``R`` and ``residual`` replace the
-        filter's defaults for this update.
+        filter's defaults for this update. The diagnostics ``y``, ``S``, ``K`` and ``H``
+        are kept even for a rejected update.
         """
         if z is None:
-            return
+            return UpdateOutcome.SKIPPED
         h: MeasurementFn
         H_jac: MeasurementFn | None
         residual: ResidualFn | None
@@ -187,8 +197,9 @@ class ExtendedKalmanFilter(KalmanFilterBase):
         else:
             y = self._checked("residual", residual(z, z_pred), (m,))
 
-        self.x, self.P, self.S, self.K = joseph_update(x, self.P, y, H, R)
+        x, P, self.S, self.K = joseph_update(x, self.P, y, H, R)
         self.y, self.H = y, H
+        return self._accept(x, P)
 
     def filter_sensors(
         self,
@@ -199,12 +210,19 @@ class ExtendedKalmanFilter(KalmanFilterBase):
 
         Each step predicts once, then updates with every stream whose row is
         not NaN, in the order given. Sequential updates are exact when the
-        sensors' noises are independent.
+        sensors' noises are independent. ``accept_posterior`` checks each sensor's
+        update on its own, so rejecting one keeps the others.
 
         Args:
             streams: ``(sensor, zs)`` pairs, with ``zs`` of shape (N, m_sensor)
                 and the same N for every stream; NaN rows mean no measurement.
             us: optional (N, p) control inputs, or a single (p,) input used every step.
+
+        Returns:
+            A :class:`FilterResult` whose ``skipped``/``rejected`` columns follow ``streams``.
+
+        Raises:
+            LockOutError: if ``max_consecutive_unabsorbed`` is set and exceeded.
         """
         if not streams:
             raise ValueError("filter_sensors needs at least one (sensor, zs) stream")
@@ -220,18 +238,17 @@ class ExtendedKalmanFilter(KalmanFilterBase):
                 raise ValueError(f"all streams need {N} rows; {sensor!r} has {zs.shape[0]}")
         us = _controls(us, N)
 
-        n = self.n
-        out = FilterResult(
-            x_prior=np.empty((N, n)),
-            P_prior=np.empty((N, n, n)),
-            x_post=np.empty((N, n)),
-            P_post=np.empty((N, n, n)),
-        )
+        out = FilterResult.empty(N, self.n, len(prepared))
         for k in range(N):
             self.predict(None if us is None else us[k])
             out.x_prior[k], out.P_prior[k] = self.x, self.P
-            for sensor, zs in prepared:
-                if not np.isnan(zs[k]).any():
-                    self.update(zs[k], sensor)
+            outcomes = []
+            for s, (sensor, zs) in enumerate(prepared):
+                outcome = self.update(None if np.isnan(zs[k]).any() else zs[k], sensor)
+                out.skipped[k, s] = outcome is UpdateOutcome.SKIPPED
+                out.rejected[k, s] = outcome is UpdateOutcome.REJECTED
+                outcomes.append(outcome)
             out.x_post[k], out.P_post[k] = self.x, self.P
+            self._end_step(outcomes, k)
+            out.unabsorbed_run[k] = self.consecutive_unabsorbed
         return out
